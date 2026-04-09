@@ -78,23 +78,11 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 	end
 end)
 
--- Main claim function - only 1 per click
+-- Claim function (1 per click only)
 local function claimOne()
-	status.Text = "Claiming..."
+	status.Text = "Claiming +1..."
 	
-	-- Force the values the server checks
-	local smileysPromo = player:WaitForChild("SmileysPromo", 3)
-	if smileysPromo then
-		local freeMax = smileysPromo:FindFirstChild("FreeMax")
-		if freeMax then
-			freeMax.Value = 10   -- Give buffer
-		end
-		
-		local viewed = smileysPromo:FindFirstChild("Viewed")
-		if viewed then viewed.Value = 1 end
-	end
-	
-	-- Fire the remote
+	-- Fire the remote directly (this is what the real button does)
 	claimRemote:FireServer()
 	
 	status.Text = "✅ +1 Max Size Sent!"
@@ -108,4 +96,4 @@ closeBtn.MouseButton1Click:Connect(function()
 	screenGui:Destroy()
 end)
 
-print("Free Max Size GUI loaded (Smileys version)")
+print("✅ Free Max Size GUI loaded (Simplified version)")
