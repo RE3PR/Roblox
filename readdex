@@ -1,236 +1,170 @@
--- Roblox Game Dumper (Executor Script)
--- Scans the specified services + all descendants
--- Live UI with timer + instance counter
--- Dumps full hierarchy tree to the exact path you requested
--- Works in any executor that supports writefile/makefolder (Fluxus, Solara, Wave, etc.)
+-- SIMPLE EXPLORER DUMPER WITH GUI TIMER
+-- Copy this ENTIRE script into your executor
 
-local ServicesToDump = {
-    "Workspace",
-    "ReplicatedStorage",
-    "Players",
-    "Lighting",
-    "StarterGui",
-    "StarterPack",
-    "StarterPlayer",
-    "Teams",
-    "SoundService",
-    "ReplicatedFirst",
-    "ServerScriptService",
-    "ServerStorage",
-    "Chat",
-    "TextChatService"
-}
+local outputPath = "C:\\Users\\RYZEN7 GAMER\\New folder\\game_dump.txt"
+local startTime = tick()
+local totalInstances = 0
+local isRunning = true
 
-local filePath = "C:\\Users\\RYZEN7 GAMER\\New Folder\\game_dump.txt"
-local folderPath = "C:\\Users\\RYZEN7 GAMER\\New Folder"
-
--- Create nice UI
-local player = game.Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-
+-- Create GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "GameDumperUI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
-
 local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 420, 0, 320)
-mainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-mainFrame.BorderSizePixel = 0
+local timerLabel = Instance.new("TextLabel")
+local statusLabel = Instance.new("TextLabel")
+local countLabel = Instance.new("TextLabel")
+local closeButton = Instance.new("TextButton")
+
+screenGui.Name = "DumperGUI"
+screenGui.Parent = game:GetService("CoreGui")
+
+mainFrame.Size = UDim2.new(0, 350, 0, 200)
+mainFrame.Position = UDim2.new(0.5, -175, 0.5, -100)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BackgroundTransparency = 0.15
 mainFrame.Parent = screenGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 12)
-corner.Parent = mainFrame
+timerLabel.Size = UDim2.new(1, 0, 0, 50)
+timerLabel.Position = UDim2.new(0, 0, 0, 30)
+timerLabel.BackgroundTransparency = 1
+timerLabel.Text = "Time: 0:00"
+timerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+timerLabel.TextSize = 24
+timerLabel.Font = Enum.Font.GothamBold
+timerLabel.Parent = mainFrame
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 50)
-title.BackgroundTransparency = 1
-title.Text = "🔍 ROBLOX GAME DUMPER"
-title.TextColor3 = Color3.fromRGB(0, 255, 100)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = mainFrame
-
-local timeLabel = Instance.new("TextLabel")
-timeLabel.Size = UDim2.new(1, -20, 0, 30)
-timeLabel.Position = UDim2.new(0, 10, 0, 60)
-timeLabel.BackgroundTransparency = 1
-timeLabel.Text = "Time elapsed: 0 seconds"
-timeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-timeLabel.TextScaled = true
-timeLabel.Font = Enum.Font.Gotham
-timeLabel.TextXAlignment = Enum.TextXAlignment.Left
-timeLabel.Parent = mainFrame
-
-local countLabel = Instance.new("TextLabel")
-countLabel.Size = UDim2.new(1, -20, 0, 30)
-countLabel.Position = UDim2.new(0, 10, 0, 95)
-countLabel.BackgroundTransparency = 1
-countLabel.Text = "Instances scanned: 0"
-countLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-countLabel.TextScaled = true
-countLabel.Font = Enum.Font.Gotham
-countLabel.TextXAlignment = Enum.TextXAlignment.Left
-countLabel.Parent = mainFrame
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -20, 0, 30)
-statusLabel.Position = UDim2.new(0, 10, 0, 130)
+statusLabel.Size = UDim2.new(1, 0, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, 80)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Starting scan..."
-statusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
-statusLabel.TextScaled = true
-statusLabel.Font = Enum.Font.GothamSemibold
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Text = "Starting..."
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.TextSize = 14
 statusLabel.Parent = mainFrame
 
-local progressBarBg = Instance.new("Frame")
-progressBarBg.Size = UDim2.new(1, -20, 0, 8)
-progressBarBg.Position = UDim2.new(0, 10, 0, 170)
-progressBarBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-progressBarBg.BorderSizePixel = 0
-progressBarBg.Parent = mainFrame
-local progressCorner = Instance.new("UICorner")
-progressCorner.CornerRadius = UDim.new(1, 0)
-progressCorner.Parent = progressBarBg
+countLabel.Size = UDim2.new(1, 0, 0, 30)
+countLabel.Position = UDim2.new(0, 0, 0, 110)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "Instances: 0"
+countLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+countLabel.TextSize = 12
+countLabel.Parent = mainFrame
 
-local progressBar = Instance.new("Frame")
-progressBar.Size = UDim2.new(0, 0, 1, 0)
-progressBar.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
-progressBar.BorderSizePixel = 0
-progressBar.Parent = progressBarBg
-local progressCorner2 = Instance.new("UICorner")
-progressCorner2.CornerRadius = UDim.new(1, 0)
-progressCorner2.Parent = progressBar
+closeButton.Size = UDim2.new(0, 100, 0, 30)
+closeButton.Position = UDim2.new(0.5, -50, 0, 150)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.Text = "Cancel"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Parent = mainFrame
 
--- Make the UI draggable
-local dragging = false
-local dragInput
-local dragStart
-local startPos
+-- Timer update
+coroutine.wrap(function()
+    while isRunning and screenGui.Parent do
+        local elapsed = tick() - startTime
+        local minutes = math.floor(elapsed / 60)
+        local seconds = math.floor(elapsed % 60)
+        timerLabel.Text = string.format("Time: %d:%02d", minutes, seconds)
+        task.wait(0.1)
+    end
+end)()
 
-local function updateDrag(input)
-    local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+-- Cancel button
+closeButton.MouseButton1Click:Connect(function()
+    isRunning = false
+    statusLabel.Text = "Cancelled!"
+    task.wait(1)
+    screenGui:Destroy()
+end)
+
+-- Dump function
+local results = {}
+local function dump(inst, depth)
+    if not isRunning then return end
+    
+    local indent = string.rep("  ", depth)
+    local name = inst.Name ~= "" and inst.Name or "Unnamed"
+    table.insert(results, indent .. name .. " (" .. inst.ClassName .. ")")
+    totalInstances = totalInstances + 1
+    
+    if totalInstances % 500 == 0 then
+        countLabel.Text = "Instances: " .. totalInstances
+        statusLabel.Text = "Scanning: " .. inst.ClassName
+        task.wait()
+    end
+    
+    for _, child in ipairs(inst:GetChildren()) do
+        dump(child, depth + 1)
+        task.wait(0.001)
+    end
 end
 
-title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
+-- Start dump
+statusLabel.Text = "Dumping game explorer..."
+task.wait(0.5)
+
+dump(game, 0)
+
+-- Save results
+local output = table.concat(results, "\n")
+local success = false
+
+-- Try to save to the specified path
+local fileSaved = false
+
+-- Method 1: Using writefile (most executors support this)
+if writefile then
+    -- Create the folder path (convert backslashes to forward slashes for Lua)
+    local folderPath = "C:/Users/RYZEN7 GAMER/New folder/"
+    local fullPath = folderPath .. "game_dump.txt"
+    
+    -- Try to create folder if possible (some executors support makefolder)
+    if makefolder then
+        pcall(function() makefolder(folderPath) end)
     end
-end)
-
-title.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        updateDrag(input)
-    end
-end)
-
--- Start scanning (DFS iterative for proper tree order + live updates)
-local startTime = os.clock()
-local instanceCount = 0
-local dumpLines = {}
-
--- Prepare stack for DFS (depth-first so children stay grouped under parents)
-local stack = {}
-
-for _, serviceName in ipairs(ServicesToDump) do
-    local success, service = pcall(function()
-        return game:GetService(serviceName)
+    
+    -- Write the file
+    local success2, err = pcall(function()
+        writefile(fullPath, output)
     end)
-    if success and service then
-        table.insert(stack, {instance = service, indent = ""})
+    
+    if success2 then
+        success = true
+        fileSaved = true
+        statusLabel.Text = "Saved to: " .. fullPath
+    else
+        -- Fallback to default location if path fails
+        pcall(function()
+            writefile("game_dump.txt", output)
+            success = true
+            fileSaved = true
+            statusLabel.Text = "Saved to: game_dump.txt (default location)"
+        end)
     end
 end
 
-statusLabel.Text = "Scanning game hierarchy..."
-
-while #stack > 0 do
-    local current = table.remove(stack)  -- LIFO = DFS
-    local inst = current.instance
-    local indent = current.indent
-
-    -- Build tree line
-    local line = indent .. "[" .. inst.ClassName .. "] " .. inst.Name
-    table.insert(dumpLines, line)
-
-    instanceCount = instanceCount + 1
-
-    -- Live UI update every 150 instances (smooth + no lag)
-    if instanceCount % 150 == 0 then
-        local elapsed = os.clock() - startTime
-        timeLabel.Text = "Time elapsed: " .. math.floor(elapsed) .. " seconds"
-        countLabel.Text = "Instances scanned: " .. instanceCount
-        progressBar.Size = UDim2.new(math.clamp(instanceCount / 5000, 0, 1), 0, 1, 0)  -- rough progress
-        task.wait()  -- yield so UI actually renders
-    end
-
-    -- Add children to stack (in reverse so original order is preserved)
-    local children = inst:GetChildren()
-    for i = #children, 1, -1 do
-        table.insert(stack, {
-            instance = children[i],
-            indent = indent .. "  "
-        })
-    end
+-- Method 2: Fallback to clipboard
+if not fileSaved and setclipboard then
+    setclipboard(output)
+    success = true
+    statusLabel.Text = "Copied to clipboard!"
 end
 
--- Final UI update
-local totalTime = os.clock() - startTime
-timeLabel.Text = "Time elapsed: " .. string.format("%.2f", totalTime) .. " seconds"
-countLabel.Text = "Instances scanned: " .. instanceCount
-statusLabel.Text = "Scan complete! Writing file..."
-progressBar.Size = UDim2.new(1, 0, 1, 0)
-
--- Ensure folder exists
-pcall(function()
-    if not isfolder(folderPath) then
-        makefolder(folderPath)
-    end
-end)
-
--- Write the full dump
-local fullDump = table.concat(dumpLines, "\n") .. "\n\n-- Dump finished in " .. string.format("%.2f", totalTime) .. " seconds. Total instances: " .. instanceCount
-
-local writeSuccess, writeErr = pcall(function()
-    writefile(filePath, fullDump)
-end)
-
-if writeSuccess then
-    statusLabel.Text = "✅ SUCCESS! File saved to:"
-    local pathLabel = Instance.new("TextLabel")
-    pathLabel.Size = UDim2.new(1, -20, 0, 60)
-    pathLabel.Position = UDim2.new(0, 10, 0, 190)
-    pathLabel.BackgroundTransparency = 1
-    pathLabel.Text = filePath
-    pathLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
-    pathLabel.TextScaled = true
-    pathLabel.TextWrapped = true
-    pathLabel.Font = Enum.Font.Code
-    pathLabel.Parent = mainFrame
-else
-    statusLabel.Text = "❌ Failed to write file"
-    local errLabel = Instance.new("TextLabel")
-    errLabel.Size = UDim2.new(1, -20, 0, 80)
-    errLabel.Position = UDim2.new(0, 10, 0, 190)
-    errLabel.BackgroundTransparency = 1
-    errLabel.Text = "Error: " .. tostring(writeErr) .. "\n\nMake sure the folder exists and your executor allows full path writing."
-    errLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-    errLabel.TextScaled = true
-    errLabel.TextWrapped = true
-    errLabel.Font = Enum.Font.Gotham
-    errLabel.Parent = mainFrame
+-- Method 3: Final fallback
+if not fileSaved and not success then
+    statusLabel.Text = "ERROR: No save method"
 end
 
-print("Game dump completed! " .. instanceCount .. " instances saved to " .. filePath)
+local elapsed = tick() - startTime
+local minutes = math.floor(elapsed / 60)
+local seconds = math.floor(elapsed % 60)
+
+timerLabel.Text = string.format("Done! %d:%02d", minutes, seconds)
+countLabel.Text = "Total: " .. totalInstances .. " instances"
+
+print("=== DUMP COMPLETE ===")
+print("Time: " .. minutes .. "m " .. seconds .. "s")
+print("Instances: " .. totalInstances)
+if success then
+    print("Saved to: " .. outputPath)
+end
+
+task.wait(3)
+screenGui:Destroy()
