@@ -1,16 +1,17 @@
 local player = game.Players.LocalPlayer
-local claimRemote = game.ReplicatedStorage:WaitForChild("Events"):WaitForChild("ClaimMaxSize")
+local upgrades = player:WaitForChild("Upgrades")
+local maxSizeValue = upgrades:WaitForChild("Maxsize")
 
--- GUI (same as before but cleaner)
+-- Create GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FreeMaxGui"
+screenGui.Name = "DirectMaxGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 280, 0, 170)
-frame.Position = UDim2.new(0.73, 0, 0.15, 0)
-frame.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
+frame.Size = UDim2.new(0, 300, 0, 180)
+frame.Position = UDim2.new(0.7, 0, 0.2, 0)
+frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
 
@@ -19,10 +20,10 @@ uiCorner.CornerRadius = UDim.new(0, 12)
 uiCorner.Parent = frame
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -55, 0.3, 0)
+title.Size = UDim2.new(1, -50, 0.3, 0)
 title.Position = UDim2.new(0, 15, 0, 10)
 title.BackgroundTransparency = 1
-title.Text = "FREE MAX SIZE"
+title.Text = "DIRECT MAX SIZE +1"
 title.TextColor3 = Color3.new(1,1,1)
 title.TextScaled = true
 title.Font = Enum.Font.GothamBold
@@ -41,16 +42,16 @@ closeBtn.Parent = frame
 local claimBtn = Instance.new("TextButton")
 claimBtn.Size = UDim2.new(1, -30, 0.45, 0)
 claimBtn.Position = UDim2.new(0, 15, 0.38, 0)
-claimBtn.BackgroundColor3 = Color3.fromRGB(0, 210, 0)
-claimBtn.Text = "CLAIM +1 FREE MAX SIZE"
+claimBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+claimBtn.Text = "GIVE +1 MAX SIZE"
 claimBtn.TextColor3 = Color3.new(1,1,1)
 claimBtn.TextScaled = true
 claimBtn.Font = Enum.Font.GothamSemibold
 claimBtn.Parent = frame
 
 local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -30, 0.17, 0)
-status.Position = UDim2.new(0, 15, 0.86, 0)
+status.Size = UDim2.new(1, -30, 0.2, 0)
+status.Position = UDim2.new(0, 15, 0.85, 0)
 status.BackgroundTransparency = 1
 status.Text = "Ready"
 status.TextColor3 = Color3.fromRGB(180, 255, 180)
@@ -58,7 +59,7 @@ status.TextScaled = true
 status.Font = Enum.Font.Gotham
 status.Parent = frame
 
--- Draggable (same)
+-- Draggable
 local dragging = false
 local dragStart, startPos
 frame.InputBegan:Connect(function(input)
@@ -78,35 +79,21 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 	end
 end)
 
--- Stronger claim function
-local function claimOne()
-	status.Text = "Sending claim..."
+local function addOneMax()
+	local current = maxSizeValue.Value
+	maxSizeValue.Value = current + 1
 	
-	-- Force client-side flags
-	local smileysPromo = player:FindFirstChild("SmileysPromo")
-	if smileysPromo then
-		local freeMax = smileysPromo:FindFirstChild("FreeMax")
-		if freeMax then freeMax.Value = 10 end
-		
-		local viewed = smileysPromo:FindFirstChild("Viewed")
-		if viewed then viewed.Value = 1 end
-	end
-	
-	-- Fire the remote multiple times quickly
-	for i = 1, 5 do
-		claimRemote:FireServer()
-		task.wait(0.08)
-	end
-	
-	status.Text = "✅ Sent 5 claims! Check your Max Size"
-	task.wait(1.5)
+	status.Text = "✅ Max Size +" .. current .. " → " .. (current + 1)
+	task.wait(1.2)
 	status.Text = "Ready - Click again"
+	
+	print("Maxsize set to:", maxSizeValue.Value)
 end
 
-claimBtn.MouseButton1Click:Connect(claimOne)
+claimBtn.MouseButton1Click:Connect(addOneMax)
 
 closeBtn.MouseButton1Click:Connect(function()
 	screenGui:Destroy()
 end)
 
-print("✅ Stronger Free Max Size GUI loaded")
+print("Direct Max Size editor loaded - Click to increase Max Size")
