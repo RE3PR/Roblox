@@ -1,16 +1,16 @@
 local player = game.Players.LocalPlayer
 local claimRemote = game.ReplicatedStorage:WaitForChild("Events"):WaitForChild("ClaimMaxSize")
 
--- Create GUI
+-- GUI (same as before but cleaner)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FreeMaxSmileysGui"
+screenGui.Name = "FreeMaxGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 280, 0, 160)
-frame.Position = UDim2.new(0.73, 0, 0.2, 0)
-frame.BackgroundColor3 = Color3.fromRGB(0, 110, 0)
+frame.Size = UDim2.new(0, 280, 0, 170)
+frame.Position = UDim2.new(0.73, 0, 0.15, 0)
+frame.BackgroundColor3 = Color3.fromRGB(0, 120, 0)
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
 
@@ -19,7 +19,7 @@ uiCorner.CornerRadius = UDim.new(0, 12)
 uiCorner.Parent = frame
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -55, 0.32, 0)
+title.Size = UDim2.new(1, -55, 0.3, 0)
 title.Position = UDim2.new(0, 15, 0, 10)
 title.BackgroundTransparency = 1
 title.Text = "FREE MAX SIZE"
@@ -39,9 +39,9 @@ closeBtn.Font = Enum.Font.GothamBold
 closeBtn.Parent = frame
 
 local claimBtn = Instance.new("TextButton")
-claimBtn.Size = UDim2.new(1, -30, 0.42, 0)
-claimBtn.Position = UDim2.new(0, 15, 0.4, 0)
-claimBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+claimBtn.Size = UDim2.new(1, -30, 0.45, 0)
+claimBtn.Position = UDim2.new(0, 15, 0.38, 0)
+claimBtn.BackgroundColor3 = Color3.fromRGB(0, 210, 0)
 claimBtn.Text = "CLAIM +1 FREE MAX SIZE"
 claimBtn.TextColor3 = Color3.new(1,1,1)
 claimBtn.TextScaled = true
@@ -49,8 +49,8 @@ claimBtn.Font = Enum.Font.GothamSemibold
 claimBtn.Parent = frame
 
 local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -30, 0.18, 0)
-status.Position = UDim2.new(0, 15, 0.87, 0)
+status.Size = UDim2.new(1, -30, 0.17, 0)
+status.Position = UDim2.new(0, 15, 0.86, 0)
 status.BackgroundTransparency = 1
 status.Text = "Ready"
 status.TextColor3 = Color3.fromRGB(180, 255, 180)
@@ -58,7 +58,7 @@ status.TextScaled = true
 status.Font = Enum.Font.Gotham
 status.Parent = frame
 
--- Draggable
+-- Draggable (same)
 local dragging = false
 local dragStart, startPos
 frame.InputBegan:Connect(function(input)
@@ -78,15 +78,28 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 	end
 end)
 
--- Claim function (1 per click only)
+-- Stronger claim function
 local function claimOne()
-	status.Text = "Claiming +1..."
+	status.Text = "Sending claim..."
 	
-	-- Fire the remote directly (this is what the real button does)
-	claimRemote:FireServer()
+	-- Force client-side flags
+	local smileysPromo = player:FindFirstChild("SmileysPromo")
+	if smileysPromo then
+		local freeMax = smileysPromo:FindFirstChild("FreeMax")
+		if freeMax then freeMax.Value = 10 end
+		
+		local viewed = smileysPromo:FindFirstChild("Viewed")
+		if viewed then viewed.Value = 1 end
+	end
 	
-	status.Text = "✅ +1 Max Size Sent!"
-	task.wait(1.2)
+	-- Fire the remote multiple times quickly
+	for i = 1, 5 do
+		claimRemote:FireServer()
+		task.wait(0.08)
+	end
+	
+	status.Text = "✅ Sent 5 claims! Check your Max Size"
+	task.wait(1.5)
 	status.Text = "Ready - Click again"
 end
 
@@ -96,4 +109,4 @@ closeBtn.MouseButton1Click:Connect(function()
 	screenGui:Destroy()
 end)
 
-print("✅ Free Max Size GUI loaded (Simplified version)")
+print("✅ Stronger Free Max Size GUI loaded")
