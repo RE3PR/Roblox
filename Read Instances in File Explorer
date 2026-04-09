@@ -1,10 +1,12 @@
--- SIMPLE EXPLORER DUMPER WITH GUI TIMER
--- Copy this ENTIRE script into your executor
+-- SIMPLE EXPLORER DUMPER FOR VEGA GG (CLIPBOARD MODE)
+-- Optimized for 40,000+ instances
+-- Copy this ENTIRE script into Vega GG
 
-local outputPath = "C:\\Users\\RYZEN7 GAMER\\New folder\\game_dump.txt"
 local startTime = tick()
 local totalInstances = 0
 local isRunning = true
+local batchSize = 1000 -- 1000 instances per batch
+local batchDelay = 5 -- 5 seconds delay between batches
 
 -- Create GUI
 local screenGui = Instance.new("ScreenGui")
@@ -12,13 +14,15 @@ local mainFrame = Instance.new("Frame")
 local timerLabel = Instance.new("TextLabel")
 local statusLabel = Instance.new("TextLabel")
 local countLabel = Instance.new("TextLabel")
+local speedLabel = Instance.new("TextLabel")
+local memoryLabel = Instance.new("TextLabel")
 local closeButton = Instance.new("TextButton")
 
 screenGui.Name = "DumperGUI"
 screenGui.Parent = game:GetService("CoreGui")
 
-mainFrame.Size = UDim2.new(0, 350, 0, 200)
-mainFrame.Position = UDim2.new(0.5, -175, 0.5, -100)
+mainFrame.Size = UDim2.new(0, 500, 0, 280)
+mainFrame.Position = UDim2.new(0.5, -250, 0.5, -140)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.Parent = screenGui
@@ -35,7 +39,7 @@ timerLabel.Parent = mainFrame
 statusLabel.Size = UDim2.new(1, 0, 0, 30)
 statusLabel.Position = UDim2.new(0, 0, 0, 80)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Starting..."
+statusLabel.Text = "Starting Vega GG Dumper..."
 statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 statusLabel.TextSize = 14
 statusLabel.Parent = mainFrame
@@ -43,13 +47,29 @@ statusLabel.Parent = mainFrame
 countLabel.Size = UDim2.new(1, 0, 0, 30)
 countLabel.Position = UDim2.new(0, 0, 0, 110)
 countLabel.BackgroundTransparency = 1
-countLabel.Text = "Instances: 0"
+countLabel.Text = "Instances: 0 / 40,000"
 countLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 countLabel.TextSize = 12
 countLabel.Parent = mainFrame
 
+speedLabel.Size = UDim2.new(1, 0, 0, 30)
+speedLabel.Position = UDim2.new(0, 0, 0, 140)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Speed: 1000/5s"
+speedLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+speedLabel.TextSize = 12
+speedLabel.Parent = mainFrame
+
+memoryLabel.Size = UDim2.new(1, 0, 0, 30)
+memoryLabel.Position = UDim2.new(0, 0, 0, 170)
+memoryLabel.BackgroundTransparency = 1
+memoryLabel.Text = "Memory: Loading..."
+memoryLabel.TextColor3 = Color3.fromRGB(100, 200, 100)
+memoryLabel.TextSize = 11
+memoryLabel.Parent = mainFrame
+
 closeButton.Size = UDim2.new(0, 100, 0, 30)
-closeButton.Position = UDim2.new(0.5, -50, 0, 150)
+closeButton.Position = UDim2.new(0.5, -50, 0, 220)
 closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 closeButton.Text = "Cancel"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -66,6 +86,16 @@ coroutine.wrap(function()
     end
 end)()
 
+-- Memory usage display
+coroutine.wrap(function()
+    while isRunning and screenGui.Parent do
+        local mem = collectgarbage("count")
+        local memMB = string.format("%.1f", mem / 1024)
+        memoryLabel.Text = string.format("Memory: %s MB (%d instances)", memMB, totalInstances)
+        task.wait(2)
+    end
+end)()
+
 -- Cancel button
 closeButton.MouseButton1Click:Connect(function()
     isRunning = false
@@ -74,97 +104,189 @@ closeButton.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Dump function
+-- Fast dump function with batching
 local results = {}
+local batchCount = 0
+local paused = false
+local estimatedTotal = 40000
+
+local function processBatch()
+    if paused then
+        task.wait(0.05)
+        return false
+    end
+    
+    batchCount = batchCount + 1
+    local percent = math.floor((totalInstances / estimatedTotal) * 100)
+    speedLabel.Text = string.format("Progress: %d/%d (%d%%)", batchCount, batchSize, percent)
+    
+    if batchCount >= batchSize then
+        paused = true
+        statusLabel.Text = string.format("Pausing %ds (processed %d instances)...", batchDelay, batchCount)
+        
+        for i = batchDelay, 1, -1 do
+            if not isRunning then break end
+            speedLabel.Text = string.format("Resuming in %d seconds... (%d%%)", i, percent)
+            task.wait(1)
+        end
+        
+        batchCount = 0
+        paused = false
+        statusLabel.Text = "Scanning game..."
+        speedLabel.Text = string.format("Progress: 0/%d (%d%%)", batchSize, percent)
+        
+        -- Force garbage collection to prevent memory issues
+        collectgarbage()
+    end
+    
+    return true
+end
+
 local function dump(inst, depth)
     if not isRunning then return end
+    
+    if not processBatch() then
+        return dump(inst, depth)
+    end
     
     local indent = string.rep("  ", depth)
     local name = inst.Name ~= "" and inst.Name or "Unnamed"
     table.insert(results, indent .. name .. " (" .. inst.ClassName .. ")")
     totalInstances = totalInstances + 1
     
+    -- Update UI every 500 instances (less frequent = faster)
     if totalInstances % 500 == 0 then
-        countLabel.Text = "Instances: " .. totalInstances
-        statusLabel.Text = "Scanning: " .. inst.ClassName
+        local percent = math.floor((totalInstances / estimatedTotal) * 100)
+        countLabel.Text = string.format("Instances: %d / %d (%d%%)", totalInstances, estimatedTotal, percent)
+        statusLabel.Text = string.format("Scanning: %s", inst.ClassName)
         task.wait()
     end
     
-    for _, child in ipairs(inst:GetChildren()) do
-        dump(child, depth + 1)
-        task.wait(0.001)
+    local children = inst:GetChildren()
+    for i = 1, #children do
+        dump(children[i], depth + 1)
+        if not isRunning then break end
     end
 end
 
 -- Start dump
-statusLabel.Text = "Dumping game explorer..."
+statusLabel.Text = "Vega GG: Dumping 40,000+ instances..."
+speedLabel.Text = string.format("Speed: %d/%ds (will auto-copy to clipboard)", batchSize, batchDelay)
 task.wait(0.5)
 
-dump(game, 0)
+-- Run the dump
+local dumpSuccess, dumpError = pcall(function()
+    dump(game, 0)
+end)
 
--- Save results
+if not dumpSuccess then
+    statusLabel.Text = "Error: " .. tostring(dumpError)
+    print("ERROR: " .. tostring(dumpError))
+end
+
+-- COPY TO CLIPBOARD (BEST METHOD FOR 40K INSTANCES)
+statusLabel.Text = "Preparing 40,000+ instances for clipboard..."
+task.wait(0.5)
+
 local output = table.concat(results, "\n")
-local success = false
+local outputSizeKB = string.format("%.1f", #output / 1024)
+local outputSizeMB = string.format("%.2f", #output / (1024 * 1024))
 
--- Try to save to the specified path
-local fileSaved = false
+print("╔════════════════════════════════════════════╗")
+print("║     COPYING TO CLIPBOARD                   ║")
+print("╠════════════════════════════════════════════╣")
+print(string.format("║ Total Instances: %d", totalInstances))
+print(string.format("║ Output Size: %s KB (%s MB)", outputSizeKB, outputSizeMB))
+print("║ Status: Copying to clipboard...           ║")
+print("╚════════════════════════════════════════════╝")
 
--- Method 1: Using writefile (most executors support this)
-if writefile then
-    -- Create the folder path (convert backslashes to forward slashes for Lua)
-    local folderPath = "C:/Users/RYZEN7 GAMER/New folder/"
-    local fullPath = folderPath .. "game_dump.txt"
-    
-    -- Try to create folder if possible (some executors support makefolder)
-    if makefolder then
-        pcall(function() makefolder(folderPath) end)
-    end
-    
-    -- Write the file
-    local success2, err = pcall(function()
-        writefile(fullPath, output)
+-- Copy to clipboard
+local clipSuccess = false
+local clipError = nil
+
+if setclipboard then
+    local success, err = pcall(function()
+        setclipboard(output)
+        clipSuccess = true
     end)
     
-    if success2 then
-        success = true
-        fileSaved = true
-        statusLabel.Text = "Saved to: " .. fullPath
-    else
-        -- Fallback to default location if path fails
-        pcall(function()
-            writefile("game_dump.txt", output)
-            success = true
-            fileSaved = true
-            statusLabel.Text = "Saved to: game_dump.txt (default location)"
-        end)
+    if not success then
+        clipError = err
     end
 end
 
--- Method 2: Fallback to clipboard
-if not fileSaved and setclipboard then
-    setclipboard(output)
-    success = true
-    statusLabel.Text = "Copied to clipboard!"
+-- Alternative clipboard methods for Vega GG
+if not clipSuccess and toclipboard then
+    local success, err = pcall(function()
+        toclipboard(output)
+        clipSuccess = true
+    end)
+    
+    if not success then
+        clipError = err
+    end
 end
 
--- Method 3: Final fallback
-if not fileSaved and not success then
-    statusLabel.Text = "ERROR: No save method"
+if not clipSuccess and Clipboard then
+    local success, err = pcall(function()
+        Clipboard.set(output)
+        clipSuccess = true
+    end)
+    
+    if not success then
+        clipError = err
+    end
 end
 
 local elapsed = tick() - startTime
 local minutes = math.floor(elapsed / 60)
 local seconds = math.floor(elapsed % 60)
 
-timerLabel.Text = string.format("Done! %d:%02d", minutes, seconds)
-countLabel.Text = "Total: " .. totalInstances .. " instances"
+timerLabel.Text = string.format("Complete! %d:%02d", minutes, seconds)
+countLabel.Text = string.format("Total: %d instances (%.1f KB)", totalInstances, outputSizeKB)
+speedLabel.Text = "Dump finished!"
 
-print("=== DUMP COMPLETE ===")
-print("Time: " .. minutes .. "m " .. seconds .. "s")
-print("Instances: " .. totalInstances)
-if success then
-    print("Saved to: " .. outputPath)
+if clipSuccess then
+    statusLabel.Text = "✅ COPIED TO CLIPBOARD! (40,000+ instances)"
+    memoryLabel.Text = string.format("Size: %s KB / %s MB - Paste anywhere!", outputSizeKB, outputSizeMB)
+    
+    print("╔════════════════════════════════════════════╗")
+    print("║     ✅ SUCCESSFULLY COPIED TO CLIPBOARD    ║")
+    print("╠════════════════════════════════════════════╣")
+    print(string.format("║ Time:      %d minutes %d seconds", minutes, seconds))
+    print(string.format("║ Instances: %d", totalInstances))
+    print(string.format("║ Size:      %s KB (%s MB)", outputSizeKB, outputSizeMB))
+    print("║                                           ║")
+    print("║ HOW TO SAVE:                              ║")
+    print("║ 1. Open Notepad                           ║")
+    print("║ 2. Press Ctrl+V (paste)                   ║")
+    print("║ 3. Save to D:\\gamedump.txt                ║")
+    print("╚════════════════════════════════════════════╝")
+else
+    statusLabel.Text = "❌ Clipboard failed - check console"
+    memoryLabel.Text = "Error: " .. tostring(clipError)
+    
+    print("╔════════════════════════════════════════════╗")
+    print("║     ❌ CLIPBOARD COPY FAILED               ║")
+    print("╠════════════════════════════════════════════╣")
+    print(string.format("║ Error: %s", tostring(clipError)))
+    print("║                                           ║")
+    print("║ ALTERNATIVE: Output in console below      ║")
+    print("╚════════════════════════════════════════════╝")
+    
+    -- Print first 100 lines as sample
+    local lines = {}
+    for line in output:gmatch("[^\r\n]+") do
+        table.insert(lines, line)
+        if #lines >= 100 then break end
+    end
+    print("\n=== SAMPLE OUTPUT (First 100 lines) ===")
+    for i = 1, #lines do
+        print(lines[i])
+    end
+    print("=== END SAMPLE ===")
+    print("\n⚠ Full output too large for console!")
 end
 
-task.wait(3)
+task.wait(8)
 screenGui:Destroy()
