@@ -1,0 +1,67 @@
+-- === Free Max Size Button ===
+local player = game.Players.LocalPlayer
+local purchaseRemote = game.ReplicatedStorage:WaitForChild("Events"):WaitForChild("PurchaseEvent")
+
+-- Create the custom GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FreeMaxGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Name = "FreeMaxFrame"
+frame.Size = UDim2.new(0, 200, 0, 100)
+frame.Position = UDim2.new(0.85, 0, 0.1, 0)  -- Top right corner
+frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 12)
+uiCorner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0.4, 0)
+title.BackgroundTransparency = 1
+title.Text = "FREE MAX SIZE"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = frame
+
+local button = Instance.new("TextButton")
+button.Name = "ClaimButton"
+button.Size = UDim2.new(1, -20, 0.5, 0)
+button.Position = UDim2.new(0, 10, 0.45, 0)
+button.BackgroundColor3 = Color3.fromRGB(0, 170, 0)
+button.Text = "CLICK FOR FREE MAX SIZE"
+button.TextColor3 = Color3.new(1, 1, 1)
+button.TextScaled = true
+button.Font = Enum.Font.GothamSemibold
+button.Parent = frame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 8)
+buttonCorner.Parent = button
+
+-- Function that fires when you click
+local function giveFreeMax()
+    purchaseRemote:FireServer("Max Size")
+    -- Optional: small visual feedback
+    button.Text = "CLAIMED +1 MAX SIZE!"
+    task.wait(0.6)
+    button.Text = "CLICK FOR FREE MAX SIZE"
+end
+
+-- Connect the button
+button.MouseButton1Click:Connect(giveFreeMax)
+
+-- Optional: Allow holding click or spam (uncomment if you want faster claiming)
+-- button.MouseButton1Down:Connect(function()
+--     while button.Parent do
+--         giveFreeMax()
+--         task.wait(0.15)  -- Adjust speed here (lower = faster)
+--     end
+-- end)
+
+print("Free Max Size button created! Click the green button in the top right.")
