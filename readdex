@@ -1,333 +1,243 @@
 --[[
-    CUSTOM SERVICE DUMPER - ALL SERVICES
-    - Saves to: C:\Users\RYZEN7 GAMER\New Folder\game_dump.txt
-    - Dumps EVERY service (Workspace, Players, ReplicatedStorage, etc.)
+    GUI TIMER EXPLORER DUMPER
+    - Shows a GUI with timer and progress
+    - Takes approximately 5 minutes
+    - Saves to file
 --]]
 
--- ========== YOUR SAVE PATH ==========
-local outputFile = "C:\\Users\\RYZEN7 GAMER\\New Folder\\game_dump.txt"
+local outputFile = "game_explorer_dump.txt"
 local startTime = tick()
+local targetSeconds = 300 -- 5 minutes
+local totalInstances = 0
 local isRunning = true
 
--- ========== ALL SERVICES SET TO TRUE ==========
-local servicesToDump = {
-    Workspace = true,
-    ReplicatedStorage = true,
-    Players = true,
-    Lighting = true,
-    StarterGui = true,
-    StarterPack = true,
-    StarterPlayer = true,
-    Teams = true,
-    SoundService = true,
-    ReplicatedFirst = true,
-    ServerScriptService = true,
-    ServerStorage = true,
-    Chat = true,
-    TextChatService = true,
-    MaterialService = true,
-    LocalizationService = true,
-    VoiceChatService = true,
-    CoreGui = false,  -- Usually not needed, set to true if you want
-    CorePackages = false, -- Usually not needed, set to true if you want
-}
+-- Check for writefile support
+if not writefile then
+    print("[!] This executor doesn't support writefile.")
+    return
+end
 
--- ========== SETTINGS ==========
-local INSTANCES_PER_BATCH = 500
-local SECONDS_PER_BATCH = 3
+-- Clear/create file
+writefile(outputFile, "")
 
--- Create GUI
+-- ============ CREATE GUI ============
 local screenGui = Instance.new("ScreenGui")
 local mainFrame = Instance.new("Frame")
 local titleLabel = Instance.new("TextLabel")
 local timerLabel = Instance.new("TextLabel")
-local etaLabel = Instance.new("TextLabel")
 local statusLabel = Instance.new("TextLabel")
-local countLabel = Instance.new("TextLabel")
-local percentLabel = Instance.new("TextLabel")
 local progressBar = Instance.new("Frame")
 local progressFill = Instance.new("Frame")
-local serviceListLabel = Instance.new("TextLabel")
+local instanceCountLabel = Instance.new("TextLabel")
 local closeButton = Instance.new("TextButton")
 
-screenGui.Name = "CustomDumperGUI"
+-- Properties
+screenGui.Name = "ExplorerDumperGUI"
 screenGui.Parent = game:GetService("CoreGui")
+pcall(function() screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui") end)
 
-mainFrame.Size = UDim2.new(0, 450, 0, 300)
-mainFrame.Position = UDim2.new(0.5, -225, 0.5, -150)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.Size = UDim2.new(0, 400, 0, 250)
+mainFrame.Position = UDim2.new(0.5, -200, 0.5, -125)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+mainFrame.BorderSizePixel = 0
 mainFrame.BackgroundTransparency = 0.1
 mainFrame.Parent = screenGui
 
+-- Title
 titleLabel.Size = UDim2.new(1, 0, 0, 40)
 titleLabel.Position = UDim2.new(0, 0, 0, 0)
 titleLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-titleLabel.Text = "Full Service Dumper (All Services)"
+titleLabel.Text = "Explorer Dumper"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 16
+titleLabel.TextSize = 20
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.Parent = mainFrame
 
-timerLabel.Size = UDim2.new(1, 0, 0, 35)
-timerLabel.Position = UDim2.new(0, 0, 0, 45)
+-- Timer Label
+timerLabel.Size = UDim2.new(1, 0, 0, 60)
+timerLabel.Position = UDim2.new(0, 0, 0, 50)
 timerLabel.BackgroundTransparency = 1
-timerLabel.Text = "Time: 0:00"
+timerLabel.Text = "Time Remaining: 5:00"
 timerLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-timerLabel.TextSize = 20
+timerLabel.TextSize = 28
 timerLabel.Font = Enum.Font.GothamBold
 timerLabel.Parent = mainFrame
 
-etaLabel.Size = UDim2.new(1, 0, 0, 30)
-etaLabel.Position = UDim2.new(0, 0, 0, 80)
-etaLabel.BackgroundTransparency = 1
-etaLabel.Text = "ETA: Calculating..."
-etaLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-etaLabel.TextSize = 14
-etaLabel.Parent = mainFrame
-
-serviceListLabel.Size = UDim2.new(1, 0, 0, 40)
-serviceListLabel.Position = UDim2.new(0, 0, 0, 110)
-serviceListLabel.BackgroundTransparency = 1
-serviceListLabel.Text = "Services: Loading..."
-serviceListLabel.TextColor3 = Color3.fromRGB(200, 200, 100)
-serviceListLabel.TextSize = 10
-serviceListLabel.TextWrapped = true
-serviceListLabel.Parent = mainFrame
-
+-- Status Label
 statusLabel.Size = UDim2.new(1, 0, 0, 30)
-statusLabel.Position = UDim2.new(0, 0, 0, 150)
+statusLabel.Position = UDim2.new(0, 0, 0, 110)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Starting..."
-statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-statusLabel.TextSize = 12
+statusLabel.Text = "Starting dump..."
+statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statusLabel.TextSize = 14
+statusLabel.Font = Enum.Font.Gotham
 statusLabel.Parent = mainFrame
 
-countLabel.Size = UDim2.new(1, 0, 0, 25)
-countLabel.Position = UDim2.new(0, 0, 0, 180)
-countLabel.BackgroundTransparency = 1
-countLabel.Text = "Instances: 0 / 0"
-countLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-countLabel.TextSize = 11
-countLabel.Parent = mainFrame
-
-percentLabel.Size = UDim2.new(1, 0, 0, 25)
-percentLabel.Position = UDim2.new(0, 0, 0, 205)
-percentLabel.BackgroundTransparency = 1
-percentLabel.Text = "0%"
-percentLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-percentLabel.TextSize = 11
-percentLabel.Parent = mainFrame
-
-progressBar.Size = UDim2.new(0.85, 0, 0, 12)
-progressBar.Position = UDim2.new(0.075, 0, 0, 232)
+-- Progress Bar Background
+progressBar.Size = UDim2.new(0.9, 0, 0, 20)
+progressBar.Position = UDim2.new(0.05, 0, 0, 150)
 progressBar.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+progressBar.BorderSizePixel = 0
 progressBar.Parent = mainFrame
 
+-- Progress Bar Fill
 progressFill.Size = UDim2.new(0, 0, 1, 0)
 progressFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+progressFill.BorderSizePixel = 0
 progressFill.Parent = progressBar
 
-closeButton.Size = UDim2.new(0, 100, 0, 30)
-closeButton.Position = UDim2.new(0.5, -50, 0, 258)
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+-- Instance Count Label
+instanceCountLabel.Size = UDim2.new(1, 0, 0, 30)
+instanceCountLabel.Position = UDim2.new(0, 0, 0, 180)
+instanceCountLabel.BackgroundTransparency = 1
+instanceCountLabel.Text = "Instances dumped: 0"
+instanceCountLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+instanceCountLabel.TextSize = 12
+instanceCountLabel.Font = Enum.Font.Gotham
+instanceCountLabel.Parent = mainFrame
+
+-- Close Button
+closeButton.Size = UDim2.new(0, 80, 0, 30)
+closeButton.Position = UDim2.new(0.5, -40, 0, 215)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 closeButton.Text = "Cancel"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 14
+closeButton.Font = Enum.Font.GothamBold
 closeButton.Parent = mainFrame
 
--- Format time function
-local function formatTime(seconds)
-    local mins = math.floor(seconds / 60)
-    local secs = math.floor(seconds % 60)
-    return string.format("%d:%02d", mins, secs)
-end
-
--- Timer update
-coroutine.wrap(function()
+-- ============ UPDATE TIMER FUNCTION ============
+local function updateTimer()
     while isRunning and screenGui and screenGui.Parent do
         local elapsed = tick() - startTime
-        timerLabel.Text = "Time: " .. formatTime(elapsed)
-        task.wait(0.2)
-    end
-end)()
-
--- Cancel button
-closeButton.MouseButton1Click:Connect(function()
-    isRunning = false
-    statusLabel.Text = "Cancelled!"
-    task.wait(1)
-    screenGui:Destroy()
-end)
-
--- Check writefile
-if not writefile then
-    statusLabel.Text = "ERROR: No writefile support"
-    task.wait(3)
-    screenGui:Destroy()
-    return
-end
-
--- Build list of services to dump (ALL SERVICES)
-local servicesList = {}
-local serviceNames = {}
-
-if servicesToDump.Workspace then table.insert(servicesList, workspace) table.insert(serviceNames, "Workspace") end
-if servicesToDump.ReplicatedStorage then pcall(function() table.insert(servicesList, game:GetService("ReplicatedStorage")) table.insert(serviceNames, "ReplicatedStorage") end) end
-if servicesToDump.Players then pcall(function() table.insert(servicesList, game:GetService("Players")) table.insert(serviceNames, "Players") end) end
-if servicesToDump.Lighting then pcall(function() table.insert(servicesList, game:GetService("Lighting")) table.insert(serviceNames, "Lighting") end) end
-if servicesToDump.StarterGui then pcall(function() table.insert(servicesList, game:GetService("StarterGui")) table.insert(serviceNames, "StarterGui") end) end
-if servicesToDump.StarterPack then pcall(function() table.insert(servicesList, game:GetService("StarterPack")) table.insert(serviceNames, "StarterPack") end) end
-if servicesToDump.StarterPlayer then pcall(function() table.insert(servicesList, game:GetService("StarterPlayer")) table.insert(serviceNames, "StarterPlayer") end) end
-if servicesToDump.Teams then pcall(function() table.insert(servicesList, game:GetService("Teams")) table.insert(serviceNames, "Teams") end) end
-if servicesToDump.SoundService then pcall(function() table.insert(servicesList, game:GetService("SoundService")) table.insert(serviceNames, "SoundService") end) end
-if servicesToDump.ReplicatedFirst then pcall(function() table.insert(servicesList, game:GetService("ReplicatedFirst")) table.insert(serviceNames, "ReplicatedFirst") end) end
-if servicesToDump.ServerScriptService then pcall(function() table.insert(servicesList, game:GetService("ServerScriptService")) table.insert(serviceNames, "ServerScriptService") end) end
-if servicesToDump.ServerStorage then pcall(function() table.insert(servicesList, game:GetService("ServerStorage")) table.insert(serviceNames, "ServerStorage") end) end
-if servicesToDump.Chat then pcall(function() table.insert(servicesList, game:GetService("Chat")) table.insert(serviceNames, "Chat") end) end
-if servicesToDump.TextChatService then pcall(function() table.insert(servicesList, game:GetService("TextChatService")) table.insert(serviceNames, "TextChatService") end) end
-if servicesToDump.MaterialService then pcall(function() table.insert(servicesList, game:GetService("MaterialService")) table.insert(serviceNames, "MaterialService") end) end
-if servicesToDump.LocalizationService then pcall(function() table.insert(servicesList, game:GetService("LocalizationService")) table.insert(serviceNames, "LocalizationService") end) end
-if servicesToDump.VoiceChatService then pcall(function() table.insert(servicesList, game:GetService("VoiceChatService")) table.insert(serviceNames, "VoiceChatService") end) end
-if servicesToDump.CoreGui then pcall(function() table.insert(servicesList, game:GetService("CoreGui")) table.insert(serviceNames, "CoreGui") end) end
-if servicesToDump.CorePackages then pcall(function() table.insert(servicesList, game:GetService("CorePackages")) table.insert(serviceNames, "CorePackages") end) end
-
--- Update GUI with selected services
-local serviceListStr = table.concat(serviceNames, ", ")
-serviceListLabel.Text = "Dumping: " .. serviceListStr
-print("[>] Selected services: " .. serviceListStr)
-print("[>] Total services to dump: " .. #servicesList)
-
--- Clear file
-writefile(outputFile, "")
-statusLabel.Text = "Collecting instances from all services..."
-task.wait(0.5)
-
--- COLLECT ALL INSTANCES FROM ALL SERVICES
-local allInstances = {}
-local totalCount = 0
-
-for _, service in ipairs(servicesList) do
-    if not isRunning then break end
-    statusLabel.Text = "Scanning: " .. service.Name
-    task.wait(0.1)
-    
-    -- Add the service itself
-    totalCount = totalCount + 1
-    table.insert(allInstances, service)
-    
-    -- Add all descendants
-    for _, inst in ipairs(service:GetDescendants()) do
-        if not isRunning then break end
-        totalCount = totalCount + 1
-        table.insert(allInstances, inst)
-        if totalCount % 1000 == 0 then
-            countLabel.Text = "Collecting: " .. totalCount .. " instances..."
-            task.wait()
+        local remaining = math.max(0, targetSeconds - elapsed)
+        local minutes = math.floor(remaining / 60)
+        local seconds = math.floor(remaining % 60)
+        
+        timerLabel.Text = string.format("Time Remaining: %d:%02d", minutes, seconds)
+        
+        -- Update progress bar (based on time)
+        local progress = math.min(1, elapsed / targetSeconds)
+        progressFill.Size = UDim2.new(progress, 0, 1, 0)
+        
+        -- Change color based on progress
+        if progress < 0.33 then
+            progressFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+        elseif progress < 0.66 then
+            progressFill.BackgroundColor3 = Color3.fromRGB(255, 200, 100)
+        else
+            progressFill.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
         end
+        
+        task.wait(0.1)
     end
 end
 
-if not isRunning then
-    screenGui:Destroy()
-    return
-end
-
--- Calculate estimates
-local totalBatches = math.ceil(totalCount / INSTANCES_PER_BATCH)
-local estSeconds = totalBatches * SECONDS_PER_BATCH
-
-etaLabel.Text = "ETA: ~" .. formatTime(estSeconds)
-statusLabel.Text = string.format("Found %d instances. Dumping %d services...", totalCount, #servicesList)
-countLabel.Text = string.format("Instances: 0 / %d", totalCount)
-task.wait(1)
-
--- Write header
-local header = "=== FULL SERVICE DUMP ===\n"
-header = header .. "Date: " .. os.date("%Y-%m-%d %H:%M:%S") .. "\n"
-header = header .. "Services dumped (" .. #servicesList .. " services): " .. serviceListStr .. "\n"
-header = header .. "Total instances: " .. totalCount .. "\n"
-header = header .. "Batch size: " .. INSTANCES_PER_BATCH .. " every " .. SECONDS_PER_BATCH .. " seconds\n"
-header = header .. "Estimated time: ~" .. formatTime(estSeconds) .. "\n"
-header = header .. string.rep("=", 50) .. "\n\n"
-writefile(outputFile, header)
-
--- DUMP IN BATCHES
-local dumped = 0
-local currentBatch = 0
-local buffer = {}
+-- ============ DUMP FUNCTION ============
+local lineBuffer = {}
+local batchSize = 10
 
 local function flushBuffer()
-    if #buffer > 0 then
+    if #lineBuffer > 0 then
         local current = readfile(outputFile) or ""
-        writefile(outputFile, current .. table.concat(buffer, "\n") .. "\n")
-        buffer = {}
+        writefile(outputFile, current .. table.concat(lineBuffer, "\n") .. "\n")
+        lineBuffer = {}
     end
 end
 
-while dumped < totalCount and isRunning do
-    currentBatch = currentBatch + 1
-    local batchEnd = math.min(dumped + INSTANCES_PER_BATCH, totalCount)
+local function dumpExplorer(instance, indentLevel)
+    if not isRunning then return end
     
-    statusLabel.Text = string.format("Batch %d/%d - Processing...", currentBatch, totalBatches)
+    local indent = string.rep("  ", indentLevel)
+    local displayName = instance.Name ~= "" and instance.Name or "[Unnamed]"
+    local line = indent .. displayName .. " (" .. instance.ClassName .. ")"
     
-    -- Process this batch
-    for i = dumped + 1, batchEnd do
-        local inst = allInstances[i]
-        local depth = inst:GetDepth()
-        local indent = string.rep("  ", depth)
-        local name = inst.Name
-        if name == "" then name = "[Unnamed]" end
-        local line = indent .. name .. " (" .. inst.ClassName .. ")"
-        table.insert(buffer, line)
-        dumped = dumped + 1
+    table.insert(lineBuffer, line)
+    totalInstances = totalInstances + 1
+    
+    -- Update GUI every 100 instances
+    if totalInstances % 100 == 0 then
+        instanceCountLabel.Text = "Instances dumped: " .. totalInstances
+        statusLabel.Text = "Dumping: " .. instance.ClassName
     end
     
-    -- Update GUI
-    local percent = (dumped / totalCount) * 100
-    countLabel.Text = string.format("Instances: %d / %d", dumped, totalCount)
-    percentLabel.Text = string.format("%.1f%% complete", percent)
-    progressFill.Size = UDim2.new(percent / 100, 0, 1, 0)
+    if #lineBuffer >= batchSize then
+        flushBuffer()
+    end
     
-    -- Update ETA based on actual speed
-    local elapsed = tick() - startTime
-    local rate = dumped / elapsed
-    local remaining = totalCount - dumped
-    local etaRemaining = remaining / rate
-    etaLabel.Text = "ETA: " .. formatTime(etaRemaining)
+    -- Slow down to hit 5 minutes
+    task.wait(0.003)
     
-    -- Save to file
-    flushBuffer()
-    
-    -- Wait before next batch (unless done)
-    if dumped < totalCount and isRunning then
-        for waitSec = 1, SECONDS_PER_BATCH do
-            if not isRunning then break end
-            statusLabel.Text = string.format("Batch %d/%d done. Waiting %ds...", currentBatch, totalBatches, SECONDS_PER_BATCH - waitSec + 1)
-            task.wait(1)
-        end
+    local children = instance:GetChildren()
+    for _, child in ipairs(children) do
+        if not isRunning then break end
+        dumpExplorer(child, indentLevel + 1)
     end
 end
 
--- Final save
+-- ============ START DUMP ============
+statusLabel.Text = "Starting dump..."
+task.wait(0.5)
+
+-- Start timer update thread
+coroutine.wrap(updateTimer)()
+
+-- Write header
+lineBuffer = {}
+table.insert(lineBuffer, "=== COMPLETE GAME EXPLORER (5-min dump) ===")
+table.insert(lineBuffer, "Game (DataModel)")
 flushBuffer()
 
-local elapsed = tick() - startTime
+-- Dump each service
+local services = game:GetChildren()
+local totalServices = #services
+
+for index, service in ipairs(services) do
+    if not isRunning then break end
+    
+    statusLabel.Text = "Dumping service: " .. service.Name
+    dumpExplorer(service, 1)
+    
+    if index < totalServices and isRunning then
+        task.wait(0.5)
+    end
+end
+
+-- Final flush
+flushBuffer()
+
+local elapsedTime = tick() - startTime
 local fileSize = (readfile(outputFile) or ""):len() / 1024
 
--- Completion
-statusLabel.Text = "COMPLETE!"
-etaLabel.Text = "Done in " .. formatTime(elapsed)
-countLabel.Text = "Total: " .. dumped .. " instances"
-percentLabel.Text = "100% complete"
-progressFill.Size = UDim2.new(1, 0, 1, 0)
-timerLabel.Text = "Done! " .. formatTime(elapsed)
+-- ============ SHOW COMPLETION ============
+if isRunning then
+    statusLabel.Text = "COMPLETE! Saved to file"
+    titleLabel.Text = "Dump Complete!"
+    timerLabel.Text = "Complete! " .. string.format("%.1f", elapsedTime/60) .. " minutes"
+    progressFill.Size = UDim2.new(1, 0, 1, 0)
+    progressFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+    instanceCountLabel.Text = "Total instances: " .. totalInstances .. " | Size: " .. string.format("%.2f", fileSize) .. " KB"
+    
+    print("\n[✓] DUMP COMPLETE")
+    print("[✓] Total instances: " .. totalInstances)
+    print("[✓] Time taken: " .. math.floor(elapsedTime) .. " seconds (" .. string.format("%.1f", elapsedTime/60) .. " minutes)")
+    print("[✓] File size: " .. string.format("%.2f", fileSize) .. " KB")
+    print("[✓] Saved to: " .. outputFile)
+    
+    -- Close GUI after 5 seconds
+    task.wait(5)
+end
 
-print("\n========== FULL SERVICE DUMP COMPLETE ==========")
-print("Saved to: " .. outputFile)
-print("Services dumped (" .. #servicesList .. " services): " .. serviceListStr)
-print("Total instances: " .. dumped)
-print("Time: " .. formatTime(elapsed))
-print("File size: " .. string.format("%.2f", fileSize) .. " KB")
-print("================================================")
+-- Close button functionality
+closeButton.MouseButton1Click:Connect(function()
+    isRunning = false
+    statusLabel.Text = "Cancelled by user"
+    timerLabel.Text = "Cancelled"
+    titleLabel.Text = "Cancelled"
+    task.wait(1)
+    if screenGui then screenGui:Destroy() end
+end)
 
+-- Auto-close after completion
 task.wait(5)
-screenGui:Destroy()
+if screenGui then screenGui:Destroy() end
