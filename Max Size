@@ -1,6 +1,12 @@
---// MAIN UI
+--// Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+--// UI (FIXED PARENT)
 local gui = Instance.new("ScreenGui")
-gui.Parent = game.CoreGui
+gui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame", gui)
 frame.Size = UDim2.new(0, 260, 0, 160)
@@ -28,7 +34,7 @@ close.MouseButton1Click:Connect(function()
     gui:Destroy()
 end)
 
--- Free Max button
+-- Button
 local btn = Instance.new("TextButton", frame)
 btn.Size = UDim2.new(0.8,0,0,40)
 btn.Position = UDim2.new(0.1,0,0.3,0)
@@ -36,7 +42,7 @@ btn.Text = "GET FREE MAX"
 btn.BackgroundColor3 = Color3.fromRGB(50,120,50)
 btn.TextColor3 = Color3.new(1,1,1)
 
--- Auto toggle
+-- Toggle
 local toggle = Instance.new("TextButton", frame)
 toggle.Size = UDim2.new(0.8,0,0,30)
 toggle.Position = UDim2.new(0.1,0,0.65,0)
@@ -46,34 +52,39 @@ toggle.TextColor3 = Color3.new(1,1,1)
 
 local auto = false
 
---// CORE FUNCTION
+--// FUNCTION
 local function giveMax()
-    pcall(function()
+    local success, err = pcall(function()
         -- Try bypass
-        local player = game.Players.LocalPlayer
         local promo = player:FindFirstChild("SmileysPromo")
-
         if promo and promo:FindFirstChild("FreeMax") then
             promo.FreeMax.Value = 999
         end
 
-        -- Fire remote
-        game.ReplicatedStorage.Events.ClaimMaxSize:FireServer()
+        -- Fire remote (SAFE CHECK)
+        local events = ReplicatedStorage:FindFirstChild("Events")
+        if events and events:FindFirstChild("ClaimMaxSize") then
+            events.ClaimMaxSize:FireServer()
+        else
+            warn("ClaimMaxSize remote not found")
+        end
     end)
+
+    if not success then
+        warn("Error:", err)
+    end
 end
 
--- Button click
-btn.MouseButton1Click:Connect(function()
-    giveMax()
-end)
+-- Click
+btn.MouseButton1Click:Connect(giveMax)
 
--- Toggle auto
+-- Toggle
 toggle.MouseButton1Click:Connect(function()
     auto = not auto
     toggle.Text = "AUTO: " .. (auto and "ON" or "OFF")
 end)
 
--- Auto loop
+-- Loop
 task.spawn(function()
     while true do
         task.wait(0.3)
