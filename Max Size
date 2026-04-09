@@ -1,17 +1,18 @@
 local player = game.Players.LocalPlayer
 local upgrades = player:WaitForChild("Upgrades")
-local maxSizeValue = upgrades:WaitForChild("Maxsize")
+local maxSize = upgrades:WaitForChild("MaxSize")          -- Exact name from your game
+local purchaseRemote = game.ReplicatedStorage:WaitForChild("Events"):WaitForChild("PurchaseEvent")
 
--- Create GUI
+-- GUI
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DirectMaxGui"
+screenGui.Name = "FreeMaxSizeGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 300, 0, 180)
 frame.Position = UDim2.new(0.7, 0, 0.2, 0)
-frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
+frame.BackgroundColor3 = Color3.fromRGB(0, 110, 0)
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
 
@@ -23,7 +24,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -50, 0.3, 0)
 title.Position = UDim2.new(0, 15, 0, 10)
 title.BackgroundTransparency = 1
-title.Text = "DIRECT MAX SIZE +1"
+title.Text = "FREE MAX SIZE"
 title.TextColor3 = Color3.new(1,1,1)
 title.TextScaled = true
 title.Font = Enum.Font.GothamBold
@@ -43,7 +44,7 @@ local claimBtn = Instance.new("TextButton")
 claimBtn.Size = UDim2.new(1, -30, 0.45, 0)
 claimBtn.Position = UDim2.new(0, 15, 0.38, 0)
 claimBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-claimBtn.Text = "GIVE +1 MAX SIZE"
+claimBtn.Text = "GIVE +1 MAX SIZE (SAVES)"
 claimBtn.TextColor3 = Color3.new(1,1,1)
 claimBtn.TextScaled = true
 claimBtn.Font = Enum.Font.GothamSemibold
@@ -79,21 +80,25 @@ game:GetService("UserInputService").InputChanged:Connect(function(input)
 	end
 end)
 
-local function addOneMax()
-	local current = maxSizeValue.Value
-	maxSizeValue.Value = current + 1
+-- Main function: +1 and trigger save
+local function giveOneMax()
+	local old = maxSize.Value
+	maxSize.Value = old + 1
 	
-	status.Text = "✅ Max Size +" .. current .. " → " .. (current + 1)
-	task.wait(1.2)
+	-- Tell the server you "bought" it so it saves
+	purchaseRemote:FireServer("MaxSize")
+	
+	status.Text = "✅ MaxSize " .. old .. " → " .. maxSize.Value .. " (saved)"
+	task.wait(1.5)
 	status.Text = "Ready - Click again"
 	
-	print("Maxsize set to:", maxSizeValue.Value)
+	print("MaxSize is now:", maxSize.Value)
 end
 
-claimBtn.MouseButton1Click:Connect(addOneMax)
+claimBtn.MouseButton1Click:Connect(giveOneMax)
 
 closeBtn.MouseButton1Click:Connect(function()
 	screenGui:Destroy()
 end)
 
-print("Direct Max Size editor loaded - Click to increase Max Size")
+print("✅ Free Max Size GUI loaded - Click to +1 and save")
