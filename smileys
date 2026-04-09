@@ -1,7 +1,7 @@
 --[[
-    Auto-Eat GUI with teleport to map center.
-    Press "Start" → teleport, set eat speed, and begin fast auto-eat (10ms loop).
-    Press "Stop" or "X" key → stop auto-eating.
+    Enhanced Auto-Eat GUI for your game (based on provided datamodel)
+    Teleports to map center, sets EatSpeed=100, eats every 10ms.
+    Press Start (or X to stop).
 --]]
 
 local Players = game:GetService("Players")
@@ -14,21 +14,22 @@ local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 
--- ========== 1. FIND MAP CENTER ==========
+-- ========== 1. FIND MAP CENTER (based on your Map folder) ==========
 local function getMapCenter()
-    -- Try to find a part named "Center" or use the average of all parts inside a "Map" folder.
+    -- Check for explicit "Center" part
     local centerPart = Workspace:FindFirstChild("Center")
     if centerPart and centerPart:IsA("BasePart") then
         return centerPart.Position
     end
 
+    -- Use average position of all parts inside "Map" folder
     local mapFolder = Workspace:FindFirstChild("Map")
     if mapFolder and mapFolder:IsA("Folder") then
         local total = Vector3.new(0,0,0)
         local count = 0
-        for _, child in ipairs(mapFolder:GetDescendants()) do
-            if child:IsA("BasePart") then
-                total = total + child.Position
+        for _, part in ipairs(mapFolder:GetDescendants()) do
+            if part:IsA("BasePart") then
+                total = total + part.Position
                 count = count + 1
             end
         end
@@ -37,7 +38,7 @@ local function getMapCenter()
         end
     end
 
-    -- Fallback: raycast from (0, 500, 0) downward to find ground
+    -- Fallback: raycast to ground at (0,500,0)
     local rayParams = RaycastParams.new()
     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
     rayParams.FilterDescendantsInstances = {character}
@@ -45,23 +46,22 @@ local function getMapCenter()
     if rayResult then
         return Vector3.new(0, rayResult.Position.Y + 3, 0)
     end
-    return Vector3.new(0, 50, 0)   -- final fallback
+    return Vector3.new(0, 50, 0)
 end
 
 -- ========== 2. SET EAT SPEED TO 100 ==========
 local function setEatSpeed()
-    -- Find EatSpeed NumberValue (from the datamodel: Player > Upgrades > EatSpeed)
     local upgrades = player:FindFirstChild("Upgrades")
     if upgrades then
         local eatSpeed = upgrades:FindFirstChild("EatSpeed")
         if eatSpeed and eatSpeed:IsA("NumberValue") then
             eatSpeed.Value = 100
-            warn("Set EatSpeed to 100")
+            warn("[AutoEat] EatSpeed set to 100")
         else
-            warn("EatSpeed NumberValue not found under Upgrades")
+            warn("[AutoEat] EatSpeed NumberValue not found")
         end
     else
-        warn("Upgrades folder not found in player")
+        warn("[AutoEat] Upgrades folder missing")
     end
 end
 
@@ -70,43 +70,35 @@ local function teleportToCenter()
     local center = getMapCenter()
     if humanoidRootPart and humanoidRootPart.Parent then
         humanoidRootPart.CFrame = CFrame.new(center)
-        task.wait(0.1)  -- brief pause to let physics settle
+        task.wait(0.1)
     end
 end
 
--- ========== 4. FIND THE "EAT" REMOTE EVENT ==========
+-- ========== 4. FIND THE EAT REMOTE (improved detection) ==========
 local eatRemote = nil
 local function findEatRemote()
-    -- Common locations for the eat remote
-    local possibleParents = {
-        ReplicatedStorage,
-        game:GetService("ReplicatedFirst"),
-        player:FindFirstChild("PlayerScripts"),
-        character,
-        Workspace
-    }
-    for _, parent in ipairs(possibleParents) do
-        if parent then
-            local remote = parent:FindFirstChild("Eat") or parent:FindFirstChild("EatTarget") or parent:FindFirstChild("Consume")
-            if remote and remote:IsA("RemoteEvent") then
-                eatRemote = remote
-                return
-            end
+    -- Common names for eat remote in such games
+    local remoteNames = {"Eat", "EatTarget", "Consume", "EatFragment", "EatToken", "EatPlayer"}
+    for _, name in ipairs(remoteNames) do
+        local remote = ReplicatedStorage:FindFirstChild(name)
+        if remote and remote:IsA("RemoteEvent") then
+            eatRemote = remote
+            warn("[AutoEat] Found eat remote:", name)
+            return
         end
     end
-    -- If still not found, search the entire DataModel (expensive, but one-time)
+    -- Search entire game (once)
     for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") and (obj.Name == "Eat" or obj.Name == "EatTarget" or obj.Name == "Consume") then
+        if obj:IsA("RemoteEvent") and table.find(remoteNames, obj.Name) then
             eatRemote = obj
-            break
+            warn("[AutoEat] Found eat remote:", obj.Name)
+            return
         end
     end
-    if not eatRemote then
-        warn("Could not find any eat RemoteEvent. Auto-eat will not work.")
-    end
+    warn("[AutoEat] No eat remote found. Auto-eat will not work.")
 end
 
--- ========== 5. FIND THE NEAREST EDIBLE TARGET ==========
+-- ========== 5. FIND NEAREST EDIBLE (based on your datamodel) ==========
 local function getNearestEdible()
     local rootPos = humanoidRootPart and humanoidRootPart.Position
     if not rootPos then return nil end
@@ -114,17 +106,18 @@ local function getNearestEdible()
     local closest = nil
     local closestDist = math.huge
 
-    -- Option A: Other players (if EatPlayers is enabled)
+    -- Option A: Eat other players (if preference enabled)
     local preferences = player:FindFirstChild("Preferences")
     local eatPlayers = preferences and preferences:FindFirstChild("Eat Players")
     if eatPlayers and eatPlayers:IsA("BoolValue") and eatPlayers.Value then
         for _, other in ipairs(Players:GetPlayers()) do
             if other ~= player then
                 local otherChar = other.Character
-                if otherChar and otherChar:FindFirstChild("HumanoidRootPart") and otherChar.Humanoid and otherChar.Humanoid.Health > 0 then
-                    local dist = (otherChar.HumanoidRootPart.Position - rootPos).Magnitude
-                    if dist < closestDist and dist < 20 then  -- range limit
-                        closest = otherChar.HumanoidRootPart
+                if otherChar and otherChar:FindFirstChild("HumanoidRootPart") then
+                    local otherHRP = otherChar.HumanoidRootPart
+                    local dist = (otherHRP.Position - rootPos).Magnitude
+                    if dist < closestDist and dist < 20 then
+                        closest = otherHRP
                         closestDist = dist
                     end
                 end
@@ -132,15 +125,28 @@ local function getNearestEdible()
         end
     end
 
-    -- Option B: Edible parts (e.g., tokens, fragments, food)
-    -- Look for parts with a specific tag or name pattern
-    local edibleTags = {"Fragmentable", "Token", "Food", "Edible"}
-    for _, tag in ipairs(edibleTags) do
-        for _, part in ipairs(Workspace:GetDescendants()) do
-            if part:IsA("BasePart") and (part.Name:find(tag) or part:GetAttribute("Edible")) then
-                local dist = (part.Position - rootPos).Magnitude
+    -- Option B: Edible parts from your Map structure (Fragmentable, Token, etc.)
+    local mapFolder = Workspace:FindFirstChild("Map")
+    if mapFolder then
+        -- Look for Fragmentable folder inside Map
+        local fragmentable = mapFolder:FindFirstChild("Fragmentable")
+        if fragmentable then
+            for _, part in ipairs(fragmentable:GetChildren()) do
+                if part:IsA("BasePart") then
+                    local dist = (part.Position - rootPos).Magnitude
+                    if dist < closestDist and dist < 30 then
+                        closest = part
+                        closestDist = dist
+                    end
+                end
+            end
+        end
+        -- Also look for Token objects (they appear in MaterialService and elsewhere)
+        for _, token in ipairs(Workspace:GetDescendants()) do
+            if token.Name == "Token" and token:IsA("BasePart") then
+                local dist = (token.Position - rootPos).Magnitude
                 if dist < closestDist and dist < 30 then
-                    closest = part
+                    closest = token
                     closestDist = dist
                 end
             end
@@ -157,12 +163,11 @@ local eatConnection = nil
 local function startAutoEat()
     if eatConnection then return end
     if not eatRemote then
-        warn("No eat remote found. Auto-eat cannot start.")
+        warn("[AutoEat] No remote – cannot start")
         return
     end
 
     eating = true
-    -- Run every 0.01 seconds (10ms)
     eatConnection = RunService.Heartbeat:Connect(function()
         if not eating then return end
         if not character or not character.Parent then
@@ -174,13 +179,12 @@ local function startAutoEat()
 
         local target = getNearestEdible()
         if target and eatRemote then
-            -- Fire the remote to eat the target
-            -- Common signature: remote:FireServer(target) or remote:FireServer(target, ...)
             pcall(function()
                 eatRemote:FireServer(target)
             end)
         end
     end)
+    warn("[AutoEat] Started (10ms loop)")
 end
 
 local function stopAutoEat()
@@ -188,79 +192,69 @@ local function stopAutoEat()
     if eatConnection then
         eatConnection:Disconnect()
         eatConnection = nil
+        warn("[AutoEat] Stopped")
     end
 end
 
--- ========== 7. GUI & KEYBINDS ==========
+-- ========== 7. CREATE GUI ==========
 local function setupGui()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "AutoEatGUI"
     screenGui.Parent = player:WaitForChild("PlayerGui")
 
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 200, 0, 100)
-    mainFrame.Position = UDim2.new(0.5, -100, 0.5, -50)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-    mainFrame.BackgroundTransparency = 0.2
+    mainFrame.Size = UDim2.new(0, 220, 0, 110)
+    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -55)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+    mainFrame.BackgroundTransparency = 0.15
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
 
     local startBtn = Instance.new("TextButton")
-    startBtn.Size = UDim2.new(0, 80, 0, 40)
+    startBtn.Size = UDim2.new(0, 90, 0, 40)
     startBtn.Position = UDim2.new(0, 10, 0, 10)
     startBtn.Text = "Start"
-    startBtn.BackgroundColor3 = Color3.fromRGB(0,200,0)
+    startBtn.BackgroundColor3 = Color3.fromRGB(0,180,0)
     startBtn.Parent = mainFrame
     startBtn.MouseButton1Click:Connect(function()
-        -- Teleport, set speed, then start eating
         teleportToCenter()
         setEatSpeed()
         startAutoEat()
+        statusLabel.Text = "Auto-eating (10ms)"
     end)
 
     local stopBtn = Instance.new("TextButton")
-    stopBtn.Size = UDim2.new(0, 80, 0, 40)
-    stopBtn.Position = UDim2.new(0, 110, 0, 10)
+    stopBtn.Size = UDim2.new(0, 90, 0, 40)
+    stopBtn.Position = UDim2.new(0, 120, 0, 10)
     stopBtn.Text = "Stop (X)"
-    stopBtn.BackgroundColor3 = Color3.fromRGB(200,0,0)
+    stopBtn.BackgroundColor3 = Color3.fromRGB(180,0,0)
     stopBtn.Parent = mainFrame
     stopBtn.MouseButton1Click:Connect(function()
         stopAutoEat()
+        statusLabel.Text = "Stopped"
     end)
 
     local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(0, 180, 0, 20)
-    statusLabel.Position = UDim2.new(0, 10, 0, 60)
+    statusLabel.Size = UDim2.new(0, 200, 0, 25)
+    statusLabel.Position = UDim2.new(0, 10, 0, 65)
     statusLabel.Text = "Idle"
     statusLabel.TextColor3 = Color3.new(1,1,1)
     statusLabel.BackgroundTransparency = 1
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextSize = 14
     statusLabel.Parent = mainFrame
 
-    -- Update status text
-    local oldStart = startAutoEat
-    local oldStop = stopAutoEat
-    _G.startAutoEat = function()
-        oldStart()
-        statusLabel.Text = "Auto-eating (10ms)"
-    end
-    _G.stopAutoEat = function()
-        oldStop()
-        statusLabel.Text = "Stopped"
-    end
-    startAutoEat = _G.startAutoEat
-    stopAutoEat = _G.stopAutoEat
-
-    -- Bind X key to stop
-    local inputConnection
-    inputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    -- X key to stop
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if gameProcessed then return end
         if input.KeyCode == Enum.KeyCode.X then
             stopAutoEat()
+            statusLabel.Text = "Stopped (X)"
         end
     end)
 end
 
--- Wait for character and remote, then setup GUI
+-- ========== INITIALIZATION ==========
 player.CharacterAdded:Connect(function(newChar)
     character = newChar
     humanoidRootPart = character:WaitForChild("HumanoidRootPart")
