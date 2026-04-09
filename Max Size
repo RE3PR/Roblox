@@ -1,104 +1,84 @@
-local player = game.Players.LocalPlayer
-local upgrades = player:WaitForChild("Upgrades")
-local maxSize = upgrades:WaitForChild("MaxSize")          -- Exact name from your game
-local purchaseRemote = game.ReplicatedStorage:WaitForChild("Events"):WaitForChild("PurchaseEvent")
+--// MAIN UI
+local gui = Instance.new("ScreenGui")
+gui.Parent = game.CoreGui
 
--- GUI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "FreeMaxSizeGui"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 260, 0, 160)
+frame.Position = UDim2.new(0.4, 0, 0.4, 0)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.Active = true
+frame.Draggable = true
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 180)
-frame.Position = UDim2.new(0.7, 0, 0.2, 0)
-frame.BackgroundColor3 = Color3.fromRGB(0, 110, 0)
-frame.BorderSizePixel = 0
-frame.Parent = screenGui
-
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 12)
-uiCorner.Parent = frame
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -50, 0.3, 0)
-title.Position = UDim2.new(0, 15, 0, 10)
-title.BackgroundTransparency = 1
-title.Text = "FREE MAX SIZE"
+-- Title
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,30)
+title.BackgroundColor3 = Color3.fromRGB(40,40,40)
+title.Text = "Free Max Size"
 title.TextColor3 = Color3.new(1,1,1)
-title.TextScaled = true
-title.Font = Enum.Font.GothamBold
-title.Parent = frame
 
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 35, 0, 35)
-closeBtn.Position = UDim2.new(1, -42, 0, 8)
-closeBtn.BackgroundColor3 = Color3.fromRGB(190, 0, 0)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.new(1,1,1)
-closeBtn.TextScaled = true
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.Parent = frame
+-- Close button
+local close = Instance.new("TextButton", frame)
+close.Size = UDim2.new(0,30,0,30)
+close.Position = UDim2.new(1,-30,0,0)
+close.Text = "X"
+close.BackgroundColor3 = Color3.fromRGB(120,40,40)
+close.TextColor3 = Color3.new(1,1,1)
 
-local claimBtn = Instance.new("TextButton")
-claimBtn.Size = UDim2.new(1, -30, 0.45, 0)
-claimBtn.Position = UDim2.new(0, 15, 0.38, 0)
-claimBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-claimBtn.Text = "GIVE +1 MAX SIZE (SAVES)"
-claimBtn.TextColor3 = Color3.new(1,1,1)
-claimBtn.TextScaled = true
-claimBtn.Font = Enum.Font.GothamSemibold
-claimBtn.Parent = frame
-
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -30, 0.2, 0)
-status.Position = UDim2.new(0, 15, 0.85, 0)
-status.BackgroundTransparency = 1
-status.Text = "Ready"
-status.TextColor3 = Color3.fromRGB(180, 255, 180)
-status.TextScaled = true
-status.Font = Enum.Font.Gotham
-status.Parent = frame
-
--- Draggable
-local dragging = false
-local dragStart, startPos
-frame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		dragging = true
-		dragStart = input.Position
-		startPos = frame.Position
-	end
-end)
-frame.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-		local delta = input.Position - dragStart
-		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-	end
+close.MouseButton1Click:Connect(function()
+    gui:Destroy()
 end)
 
--- Main function: +1 and trigger save
-local function giveOneMax()
-	local old = maxSize.Value
-	maxSize.Value = old + 1
-	
-	-- Tell the server you "bought" it so it saves
-	purchaseRemote:FireServer("MaxSize")
-	
-	status.Text = "✅ MaxSize " .. old .. " → " .. maxSize.Value .. " (saved)"
-	task.wait(1.5)
-	status.Text = "Ready - Click again"
-	
-	print("MaxSize is now:", maxSize.Value)
+-- Free Max button
+local btn = Instance.new("TextButton", frame)
+btn.Size = UDim2.new(0.8,0,0,40)
+btn.Position = UDim2.new(0.1,0,0.3,0)
+btn.Text = "GET FREE MAX"
+btn.BackgroundColor3 = Color3.fromRGB(50,120,50)
+btn.TextColor3 = Color3.new(1,1,1)
+
+-- Auto toggle
+local toggle = Instance.new("TextButton", frame)
+toggle.Size = UDim2.new(0.8,0,0,30)
+toggle.Position = UDim2.new(0.1,0,0.65,0)
+toggle.Text = "AUTO: OFF"
+toggle.BackgroundColor3 = Color3.fromRGB(80,80,80)
+toggle.TextColor3 = Color3.new(1,1,1)
+
+local auto = false
+
+--// CORE FUNCTION
+local function giveMax()
+    pcall(function()
+        -- Try bypass
+        local player = game.Players.LocalPlayer
+        local promo = player:FindFirstChild("SmileysPromo")
+
+        if promo and promo:FindFirstChild("FreeMax") then
+            promo.FreeMax.Value = 999
+        end
+
+        -- Fire remote
+        game.ReplicatedStorage.Events.ClaimMaxSize:FireServer()
+    end)
 end
 
-claimBtn.MouseButton1Click:Connect(giveOneMax)
-
-closeBtn.MouseButton1Click:Connect(function()
-	screenGui:Destroy()
+-- Button click
+btn.MouseButton1Click:Connect(function()
+    giveMax()
 end)
 
-print("✅ Free Max Size GUI loaded - Click to +1 and save")
+-- Toggle auto
+toggle.MouseButton1Click:Connect(function()
+    auto = not auto
+    toggle.Text = "AUTO: " .. (auto and "ON" or "OFF")
+end)
+
+-- Auto loop
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if auto then
+            giveMax()
+        end
+    end
+end)
