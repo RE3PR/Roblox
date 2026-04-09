@@ -7,8 +7,8 @@ local isRunning = true
 local batchSize = 1000 -- 1000 instances per batch
 local batchDelay = 5 -- 5 seconds delay between batches
 local saveInterval = 5000 -- Save every 5000 instances
-local saves = {} -- Table to store saves
-local currentSaveData = {} -- Current accumulating save data
+local allInstances = {} -- Store ALL instances first
+local saves = {} -- Table to store saves AFTER dumping
 
 -- Create GUI
 local screenGui = Instance.new("ScreenGui")
@@ -20,12 +20,13 @@ local speedLabel = Instance.new("TextLabel")
 local closeButton = Instance.new("TextButton")
 local savesFrame = Instance.new("ScrollingFrame")
 local savesLayout = Instance.new("UIListLayout")
+local completeLabel = Instance.new("TextLabel")
 
 screenGui.Name = "DumperGUI"
 screenGui.Parent = game:GetService("CoreGui")
 
-mainFrame.Size = UDim2.new(0, 500, 0, 600)
-mainFrame.Position = UDim2.new(0.5, -250, 0.5, -300)
+mainFrame.Size = UDim2.new(0, 550, 0, 650)
+mainFrame.Position = UDim2.new(0.5, -275, 0.5, -325)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 mainFrame.BackgroundTransparency = 0.15
 mainFrame.Parent = screenGui
@@ -63,24 +64,34 @@ speedLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
 speedLabel.TextSize = 12
 speedLabel.Parent = mainFrame
 
+completeLabel.Size = UDim2.new(1, 0, 0, 30)
+completeLabel.Position = UDim2.new(0, 0, 0, 150)
+completeLabel.BackgroundTransparency = 1
+completeLabel.Text = ""
+completeLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+completeLabel.TextSize = 14
+completeLabel.Visible = false
+completeLabel.Parent = mainFrame
+
 -- Saves display area
-savesFrame.Size = UDim2.new(0, 480, 0, 350)
-savesFrame.Position = UDim2.new(0, 10, 0, 160)
+savesFrame.Size = UDim2.new(0, 530, 0, 350)
+savesFrame.Position = UDim2.new(0, 10, 0, 190)
 savesFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 savesFrame.BackgroundTransparency = 0.3
 savesFrame.BorderSizePixel = 1
 savesFrame.BorderColor3 = Color3.fromRGB(100, 100, 150)
 savesFrame.Parent = mainFrame
 savesFrame.ScrollBarThickness = 10
+savesFrame.Visible = false
 
 savesLayout.Parent = savesFrame
 savesLayout.SortOrder = Enum.SortOrder.LayoutOrder
 savesLayout.Padding = UDim.new(0, 5)
 
 closeButton.Size = UDim2.new(0, 100, 0, 30)
-closeButton.Position = UDim2.new(0.5, -50, 0, 520)
+closeButton.Position = UDim2.new(0.5, -50, 0, 560)
 closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeButton.Text = "Cancel"
+closeButton.Text = "Close"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.Parent = mainFrame
 
@@ -95,85 +106,90 @@ coroutine.wrap(function()
     end
 end)()
 
--- Function to create a save button
-local function createSaveButton(saveNumber, saveData)
-    local buttonFrame = Instance.new("Frame")
-    local saveLabel = Instance.new("TextLabel")
-    local copyButton = Instance.new("TextButton")
-    local statusLabel_save = Instance.new("TextLabel")
+-- Function to create save buttons AFTER dumping is complete
+local function createSaveButtons()
+    -- Clear existing buttons
+    for _, child in pairs(savesFrame:GetChildren()) do
+        if child:IsA("Frame") then
+            child:Destroy()
+        end
+    end
     
-    buttonFrame.Size = UDim2.new(1, -10, 0, 40)
-    buttonFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    buttonFrame.BackgroundTransparency = 0.2
-    buttonFrame.BorderSizePixel = 1
-    buttonFrame.BorderColor3 = Color3.fromRGB(80, 80, 120)
-    buttonFrame.Parent = savesFrame
-    
-    saveLabel.Size = UDim2.new(0.6, -10, 1, 0)
-    saveLabel.Position = UDim2.new(0, 10, 0, 0)
-    saveLabel.BackgroundTransparency = 1
-    saveLabel.Text = string.format("Save %d (%d instances)", saveNumber, #saveData)
-    saveLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
-    saveLabel.TextSize = 14
-    saveLabel.TextXAlignment = Enum.TextXAlignment.Left
-    saveLabel.Parent = buttonFrame
-    
-    copyButton.Size = UDim2.new(0, 100, 0, 30)
-    copyButton.Position = UDim2.new(0.7, 0, 0, 5)
-    copyButton.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
-    copyButton.Text = "Copy to Clipboard"
-    copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    copyButton.TextSize = 12
-    copyButton.Parent = buttonFrame
-    
-    statusLabel_save.Size = UDim2.new(0, 150, 0, 20)
-    statusLabel_save.Position = UDim2.new(0.85, 0, 0, 10)
-    statusLabel_save.BackgroundTransparency = 1
-    statusLabel_save.Text = ""
-    statusLabel_save.TextColor3 = Color3.fromRGB(100, 255, 100)
-    statusLabel_save.TextSize = 10
-    statusLabel_save.Parent = buttonFrame
-    
-    copyButton.MouseButton1Click:Connect(function()
-        local saveText = table.concat(saveData, "\n")
-        if setclipboard then
-            local success, err = pcall(function()
-                setclipboard(saveText)
-            end)
-            if success then
-                statusLabel_save.Text = "✓ Copied!"
-                statusLabel_save.TextColor3 = Color3.fromRGB(100, 255, 100)
-                task.wait(1.5)
-                statusLabel_save.Text = ""
+    -- Create a button for each save
+    for saveNumber, saveData in ipairs(saves) do
+        local buttonFrame = Instance.new("Frame")
+        local saveLabel = Instance.new("TextLabel")
+        local copyButton = Instance.new("TextButton")
+        local statusLabel_save = Instance.new("TextLabel")
+        
+        buttonFrame.Size = UDim2.new(1, -10, 0, 45)
+        buttonFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+        buttonFrame.BackgroundTransparency = 0.2
+        buttonFrame.BorderSizePixel = 1
+        buttonFrame.BorderColor3 = Color3.fromRGB(80, 80, 120)
+        buttonFrame.Parent = savesFrame
+        
+        saveLabel.Size = UDim2.new(0.5, -10, 1, 0)
+        saveLabel.Position = UDim2.new(0, 10, 0, 0)
+        saveLabel.BackgroundTransparency = 1
+        saveLabel.Text = string.format("Save %d (%d instances)", saveNumber, #saveData)
+        saveLabel.TextColor3 = Color3.fromRGB(200, 200, 255)
+        saveLabel.TextSize = 14
+        saveLabel.TextXAlignment = Enum.TextXAlignment.Left
+        saveLabel.Parent = buttonFrame
+        
+        copyButton.Size = UDim2.new(0, 120, 0, 35)
+        copyButton.Position = UDim2.new(0.6, 0, 0, 5)
+        copyButton.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+        copyButton.Text = "📋 Copy to Clipboard"
+        copyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        copyButton.TextSize = 12
+        copyButton.Parent = buttonFrame
+        
+        statusLabel_save.Size = UDim2.new(0, 150, 0, 20)
+        statusLabel_save.Position = UDim2.new(0.82, 0, 0, 12)
+        statusLabel_save.BackgroundTransparency = 1
+        statusLabel_save.Text = ""
+        statusLabel_save.TextColor3 = Color3.fromRGB(100, 255, 100)
+        statusLabel_save.TextSize = 11
+        statusLabel_save.Parent = buttonFrame
+        
+        copyButton.MouseButton1Click:Connect(function()
+            local saveText = table.concat(saveData, "\n")
+            if setclipboard then
+                local success, err = pcall(function()
+                    setclipboard(saveText)
+                end)
+                if success then
+                    statusLabel_save.Text = "✓ Copied to clipboard!"
+                    statusLabel_save.TextColor3 = Color3.fromRGB(100, 255, 100)
+                    task.wait(1.5)
+                    statusLabel_save.Text = ""
+                else
+                    statusLabel_save.Text = "Failed to copy!"
+                    statusLabel_save.TextColor3 = Color3.fromRGB(255, 100, 100)
+                    task.wait(1.5)
+                    statusLabel_save.Text = ""
+                end
             else
-                statusLabel_save.Text = "Failed!"
+                statusLabel_save.Text = "Clipboard not available"
                 statusLabel_save.TextColor3 = Color3.fromRGB(255, 100, 100)
                 task.wait(1.5)
                 statusLabel_save.Text = ""
             end
-        else
-            statusLabel_save.Text = "Clipboard not available"
-            statusLabel_save.TextColor3 = Color3.fromRGB(255, 100, 100)
-            task.wait(1.5)
-            statusLabel_save.Text = ""
-        end
-    end)
+        end)
+    end
 end
 
 -- Cancel button
 closeButton.MouseButton1Click:Connect(function()
     isRunning = false
-    statusLabel.Text = "Cancelled!"
-    task.wait(1)
     screenGui:Destroy()
 end)
 
 -- Fast dump function with batching
-local results = {}
 local batchCount = 0
 local paused = false
-local lastUpdate = tick()
-local instanceCounter = 0
 
 local function processBatch()
     if paused then
@@ -182,7 +198,7 @@ local function processBatch()
     end
     
     batchCount = batchCount + 1
-    speedLabel.Text = string.format("Progress: %d/%d instances", batchCount, batchSize)
+    speedLabel.Text = string.format("Batch progress: %d/%d", batchCount, batchSize)
     
     if batchCount >= batchSize then
         paused = true
@@ -198,7 +214,7 @@ local function processBatch()
         batchCount = 0
         paused = false
         statusLabel.Text = "Scanning game..."
-        speedLabel.Text = string.format("Progress: 0/%d instances", batchSize)
+        speedLabel.Text = string.format("Batch progress: 0/%d", batchSize)
     end
     
     return true
@@ -215,34 +231,12 @@ local function dump(inst, depth)
     local name = inst.Name ~= "" and inst.Name or "Unnamed"
     local instanceLine = indent .. name .. " (" .. inst.ClassName .. ")"
     
-    table.insert(results, instanceLine)
-    table.insert(currentSaveData, instanceLine)
+    table.insert(allInstances, instanceLine)
     totalInstances = totalInstances + 1
-    instanceCounter = instanceCounter + 1
-    
-    -- Check if we need to create a save
-    if instanceCounter >= saveInterval then
-        -- Save the current batch
-        local saveNumber = #saves + 1
-        saves[saveNumber] = {table.clone(currentSaveData)}
-        createSaveButton(saveNumber, saves[saveNumber][1])
-        
-        -- Reset for next save
-        currentSaveData = {}
-        instanceCounter = 0
-        
-        -- Update UI
-        statusLabel.Text = string.format("Saved #%d (%d instances)", saveNumber, saveInterval)
-        countLabel.Text = string.format("Instances: %d | Saves: %d", totalInstances, saveNumber)
-        
-        -- Scroll to bottom
-        task.wait(0.1)
-        savesFrame.CanvasPosition = Vector2.new(0, savesFrame.CanvasSize.Y.Offset)
-    end
     
     -- Update UI more efficiently (every 250 instances)
     if totalInstances % 250 == 0 then
-        countLabel.Text = string.format("Instances: %d | Saves: %d", totalInstances, #saves)
+        countLabel.Text = string.format("Instances dumped: %d", totalInstances)
         statusLabel.Text = string.format("Scanning: %s", inst.ClassName)
         task.wait()
     end
@@ -257,7 +251,7 @@ end
 
 -- Start dump
 statusLabel.Text = "Vega GG: Dumping game explorer..."
-speedLabel.Text = string.format("Speed: %d/%ds", batchSize, batchDelay)
+speedLabel.Text = string.format("Batch size: %d (pausing %ds between batches)", batchSize, batchDelay)
 task.wait(0.5)
 
 -- Run the dump with error handling
@@ -270,41 +264,51 @@ if not dumpSuccess then
     print("ERROR: " .. tostring(dumpError))
 end
 
--- Save any remaining instances (last partial save)
-if #currentSaveData > 0 then
-    local saveNumber = #saves + 1
-    saves[saveNumber] = {table.clone(currentSaveData)}
-    createSaveButton(saveNumber, saves[saveNumber][1])
-    statusLabel.Text = string.format("Saved #%d (%d instances)", saveNumber, #currentSaveData)
-    currentSaveData = {}
+-- Dumping complete, now organize into saves of 5000 instances
+statusLabel.Text = "Organizing instances into saves..."
+countLabel.Text = string.format("Total instances: %d", totalInstances)
+task.wait(0.5)
+
+-- Split all instances into saves of 5000
+local saveNumber = 1
+for i = 1, #allInstances, saveInterval do
+    local saveData = {}
+    for j = i, math.min(i + saveInterval - 1, #allInstances) do
+        table.insert(saveData, allInstances[j])
+    end
+    table.insert(saves, saveData)
+    saveNumber = saveNumber + 1
 end
 
--- Update final status
+-- Show completion message
 local elapsed = tick() - startTime
 local minutes = math.floor(elapsed / 60)
 local seconds = math.floor(elapsed % 60)
 
 timerLabel.Text = string.format("Complete! %d:%02d", minutes, seconds)
-countLabel.Text = string.format("Total: %d instances | Saves: %d", totalInstances, #saves)
+countLabel.Text = string.format("Total: %d instances in %d saves", totalInstances, #saves)
 speedLabel.Text = "Dump finished!"
+completeLabel.Text = string.format("✅ Dump complete! %d saves available (5000 instances each)", #saves)
+completeLabel.Visible = true
 
-if #saves == 0 then
-    statusLabel.Text = "⚠️ No saves created (no instances dumped?)"
-else
-    statusLabel.Text = string.format("✅ Dump complete! %d saves available (5000 instances each)", #saves)
-end
+-- Show saves frame and create buttons
+savesFrame.Visible = true
+createSaveButtons()
 
 -- Print summary to console
-print("╔════════════════════════════════════╗")
-print("║     VEGA GG DUMP COMPLETE          ║")
-print("╠════════════════════════════════════╣")
+print("╔════════════════════════════════════════════╗")
+print("║     VEGA GG DUMP COMPLETE                  ║")
+print("╠════════════════════════════════════════════╣")
 print(string.format("║ Time:      %d minutes %d seconds", minutes, seconds))
 print(string.format("║ Instances: %d", totalInstances))
 print(string.format("║ Batches:   %d", math.ceil(totalInstances / batchSize)))
 print(string.format("║ Saves:     %d (5000 instances each)", #saves))
-print("╚════════════════════════════════════╝")
+print("╠════════════════════════════════════════════╣")
+print("║ Click 'Copy to Clipboard' on any save      ║")
+print("║ to copy that specific save's instances     ║")
+print("╚════════════════════════════════════════════╝")
 
--- Keep GUI open so user can copy saves
-task.wait(2)
+statusLabel.Text = "Ready! Click any save button to copy its instances"
+
 -- GUI stays open for user to click copy buttons
--- Will close when user clicks cancel or manually closes
+-- User can close manually with the Close button
