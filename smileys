@@ -1,73 +1,120 @@
--- Place this in a LocalScript inside StarterPlayerScripts or StarterGui
+-- Executor code - Run this directly in your executor
 
-local player = game.Players.LocalPlayer
+local player = game:GetService("Players").LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+local coreGui = game:GetService("CoreGui")
 
--- Find the SmileysEvent frame (it might be in different locations)
-local smileysFrame = nil
+-- Find the existing SmileysEvent
+local smileysEvent = nil
 
--- Search for SmileysEvent in various locations
+-- Search common locations
 local searchLocations = {
     playerGui:FindFirstChild("SmileysEvent"),
-    game:GetService("CoreGui"):FindFirstChild("SmileysEvent"),
-    player:FindFirstChild("SmileysEvent")
+    coreGui:FindFirstChild("SmileysEvent"),
+    coreGui:FindFirstChild("RobloxGui"):FindFirstChild("SmileysEvent"),
+    workspace:FindFirstChild("SmileysEvent"),
+    game:FindFirstChild("SmileysEvent", true)
 }
 
-for _, location in pairs(searchLocations) do
-    if location then
-        smileysFrame = location
+for _, loc in pairs(searchLocations) do
+    if loc then
+        smileysEvent = loc
         break
     end
 end
 
--- If not found, check if it's in the provided data model structure
-if not smileysFrame then
-    -- Look for it in the workspace hierarchy
-    smileysFrame = game.Worksound:FindFirstChild("SmileysEvent")
+-- Deep search if not found
+if not smileysEvent then
+    local function deepSearch(inst, maxDepth)
+        if maxDepth and maxDepth <= 0 then return nil end
+        if inst.Name == "SmileysEvent" then return inst end
+        for _, child in pairs(inst:GetChildren()) do
+            local found = deepSearch(child, (maxDepth or 20) - 1)
+            if found then return found end
+        end
+        return nil
+    end
+    smileysEvent = deepSearch(game, 20)
 end
 
--- Function to create the Smileys UI if it doesn't exist
-local function createSmileysUI()
+if smileysEvent then
+    print("[Smileys] Found:", smileysEvent:GetFullName())
+    
+    -- Enable everything
+    smileysEvent.Visible = true
+    if smileysEvent:IsA("ScreenGui") then
+        smileysEvent.Enabled = true
+        smileysEvent.DisplayOrder = 999
+        smileysEvent.ResetOnSpawn = false
+        pcall(function() smileysEvent.IgnoreGuiInset = true end)
+    end
+    
+    -- Re-enable all LocalScripts
+    for _, script in pairs(smileysEvent:GetDescendants()) do
+        if script:IsA("LocalScript") then
+            pcall(function()
+                script.Disabled = true
+                wait(0.05)
+                script.Disabled = false
+            end)
+        end
+        if script:IsA("Frame") or script:IsA("ImageLabel") or script:IsA("TextLabel") or script:IsA("TextButton") then
+            pcall(function() script.Visible = true end)
+            pcall(function() script.Active = true end)
+        end
+    end
+    
+    -- Bring to front
+    if smileysEvent.Parent then
+        smileysEvent.Parent = nil
+        wait(0.1)
+        smileysEvent.Parent = playerGui
+    end
+    
+    print("[Smileys] ✅ Menu restored!")
+    print("[Smileys] Type /smileys in chat or click the 😊 button")
+    
+else
+    print("[Smileys] ❌ Could not find original SmileysEvent, creating new one...")
+    
+    -- Create new Smileys UI since original wasn't found
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "SmileysEvent"
     screenGui.ResetOnSpawn = false
+    screenGui.IgnoreGuiInset = true
     screenGui.Parent = playerGui
     
-    -- Main Frame
+    -- Main frame
     local mainFrame = Instance.new("Frame")
-    mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 400, 0, 500)
-    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-    mainFrame.BackgroundTransparency = 0.1
+    mainFrame.Size = UDim2.new(0, 450, 0, 550)
+    mainFrame.Position = UDim2.new(0.5, -225, 0.5, -275)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    mainFrame.BackgroundTransparency = 0.05
     mainFrame.BorderSizePixel = 0
     mainFrame.Parent = screenGui
     
-    -- Corner rounding
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = mainFrame
     
-    -- Stroke/border
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(255, 200, 100)
+    stroke.Color = Color3.fromRGB(255, 180, 80)
     stroke.Thickness = 2
     stroke.Parent = mainFrame
     
-    -- Gradient background
+    -- Gradient
     local gradient = Instance.new("UIGradient")
     gradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 40, 50)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 25, 35))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 25, 45)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 35))
     })
     gradient.Parent = mainFrame
     
     -- Title
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 50)
-    title.Position = UDim2.new(0, 0, 0, 0)
-    title.Text = "🎉 Smileys Rewards 🎉"
-    title.TextColor3 = Color3.fromRGB(255, 215, 100)
+    title.Size = UDim2.new(1, 0, 0, 55)
+    title.Text = "🎭 SMILEYS REWARDS 🎭"
+    title.TextColor3 = Color3.fromRGB(255, 200, 100)
     title.TextScaled = true
     title.Font = Enum.Font.GothamBold
     title.BackgroundTransparency = 1
@@ -75,97 +122,89 @@ local function createSmileysUI()
     
     -- Close button
     local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 10)
+    closeBtn.Size = UDim2.new(0, 35, 0, 35)
+    closeBtn.Position = UDim2.new(1, -45, 0, 10)
     closeBtn.Text = "✕"
     closeBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-    closeBtn.TextScaled = true
+    closeBtn.TextSize = 20
     closeBtn.BackgroundTransparency = 1
     closeBtn.Parent = mainFrame
     closeBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
+        screenGui.Enabled = false
     end)
     
-    -- Tasks container
-    local tasksContainer = Instance.new("ScrollingFrame")
-    tasksContainer.Size = UDim2.new(1, -20, 1, -100)
-    tasksContainer.Position = UDim2.new(0, 10, 0, 60)
-    tasksContainer.BackgroundTransparency = 1
-    tasksContainer.BorderSizePixel = 0
-    tasksContainer.ScrollBarThickness = 8
-    tasksContainer.Parent = mainFrame
+    -- Scrolling frame for tasks
+    local scrollFrame = Instance.new("ScrollingFrame")
+    scrollFrame.Size = UDim2.new(1, -20, 1, -90)
+    scrollFrame.Position = UDim2.new(0, 10, 0, 65)
+    scrollFrame.BackgroundTransparency = 1
+    scrollFrame.BorderSizePixel = 0
+    scrollFrame.ScrollBarThickness = 6
+    scrollFrame.Parent = mainFrame
     
-    local tasksLayout = Instance.new("UIListLayout")
-    tasksLayout.Padding = UDim.new(0, 10)
-    tasksLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    tasksLayout.Parent = tasksContainer
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 12)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.Parent = scrollFrame
     
-    -- Example tasks (you can modify these)
+    -- Sample tasks (replace with your actual smileys data if needed)
     local tasks = {
-        {name = "Collect 10 Cubes", reward = "100 Tokens", required = 10, current = 0},
-        {name = "Eat 5 Players", reward = "200 Tokens", required = 5, current = 0},
-        {name = "Reach Size 50", reward = "500 Tokens", required = 50, current = 0},
-        {name = "Play for 30 Minutes", reward = "300 Tokens", required = 30, current = 0}
+        {name = "😀 Collect 50 Smileys", reward = "500", required = 50},
+        {name = "😂 Get 10 Laugh Reactions", reward = "300", required = 10},
+        {name = "🥳 Party Emote 20 Times", reward = "800", required = 20},
+        {name = "😎 Reach Level 5", reward = "1000", required = 5},
+        {name = "🔥 5 Day Login Streak", reward = "1500", required = 5},
     }
     
-    -- Create task UI elements
-    local taskFrames = {}
-    
-    for i, task in ipairs(tasks) do
+    for _, task in pairs(tasks) do
         local taskFrame = Instance.new("Frame")
-        taskFrame.Size = UDim2.new(1, 0, 0, 80)
-        taskFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-        taskFrame.BackgroundTransparency = 0.3
+        taskFrame.Size = UDim2.new(1, -20, 0, 85)
+        taskFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+        taskFrame.BackgroundTransparency = 0.2
         taskFrame.BorderSizePixel = 0
-        taskFrame.Parent = tasksContainer
+        taskFrame.Parent = scrollFrame
         
         local taskCorner = Instance.new("UICorner")
         taskCorner.CornerRadius = UDim.new(0, 8)
         taskCorner.Parent = taskFrame
         
-        local taskStroke = Instance.new("UIStroke")
-        taskStroke.Color = Color3.fromRGB(255, 200, 100)
-        taskStroke.Thickness = 1
-        taskStroke.Transparency = 0.5
-        taskStroke.Parent = taskFrame
+        -- Task name
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(0.6, 0, 0, 35)
+        nameLabel.Position = UDim2.new(0, 12, 0, 8)
+        nameLabel.Text = task.name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Font = Enum.Font.GothamSemibold
+        nameLabel.TextSize = 15
+        nameLabel.Parent = taskFrame
         
-        -- Task title
-        local taskTitle = Instance.new("TextLabel")
-        taskTitle.Size = UDim2.new(0.6, 0, 0, 30)
-        taskTitle.Position = UDim2.new(0, 10, 0, 10)
-        taskTitle.Text = task.name
-        taskTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-        taskTitle.TextXAlignment = Enum.TextXAlignment.Left
-        taskTitle.BackgroundTransparency = 1
-        taskTitle.Font = Enum.Font.GothamSemibold
-        taskTitle.TextSize = 16
-        taskTitle.Parent = taskFrame
-        
-        -- Reward text
-        local rewardText = Instance.new("TextLabel")
-        rewardText.Size = UDim2.new(0.3, 0, 0, 30)
-        rewardText.Position = UDim2.new(0.7, 0, 0, 10)
-        rewardText.Text = "🏆 " .. task.reward
-        rewardText.TextColor3 = Color3.fromRGB(255, 215, 100)
-        rewardText.TextXAlignment = Enum.TextXAlignment.Right
-        rewardText.BackgroundTransparency = 1
-        rewardText.Font = Enum.Font.GothamBold
-        rewardText.TextSize = 14
-        rewardText.Parent = taskFrame
+        -- Reward
+        local rewardLabel = Instance.new("TextLabel")
+        rewardLabel.Size = UDim2.new(0.3, 0, 0, 35)
+        rewardLabel.Position = UDim2.new(0.7, 0, 0, 8)
+        rewardLabel.Text = "💰 " .. task.reward
+        rewardLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
+        rewardLabel.TextXAlignment = Enum.TextXAlignment.Right
+        rewardLabel.BackgroundTransparency = 1
+        rewardLabel.Font = Enum.Font.GothamBold
+        rewardLabel.TextSize = 14
+        rewardLabel.Parent = taskFrame
         
         -- Progress bar background
         local progressBg = Instance.new("Frame")
-        progressBg.Size = UDim2.new(0.95, 0, 0, 20)
-        progressBg.Position = UDim2.new(0, 10, 0, 50)
-        progressBg.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+        progressBg.Size = UDim2.new(0.9, 0, 0, 18)
+        progressBg.Position = UDim2.new(0, 12, 0, 52)
+        progressBg.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
         progressBg.BorderSizePixel = 0
         progressBg.Parent = taskFrame
         
-        local progressCorner = Instance.new("UICorner")
-        progressCorner.CornerRadius = UDim.new(1, 0)
-        progressCorner.Parent = progressBg
+        local progCorner = Instance.new("UICorner")
+        progCorner.CornerRadius = UDim.new(1, 0)
+        progCorner.Parent = progressBg
         
-        -- Progress bar fill
+        -- Progress fill
         local progressFill = Instance.new("Frame")
         progressFill.Size = UDim2.new(0, 0, 1, 0)
         progressFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
@@ -177,99 +216,108 @@ local function createSmileysUI()
         fillCorner.Parent = progressFill
         
         -- Progress text
-        local progressText = Instance.new("TextLabel")
-        progressText.Size = UDim2.new(0.3, 0, 0, 20)
-        progressText.Position = UDim2.new(0.7, 0, 0, 50)
-        progressText.Text = "0/" .. task.required
-        progressText.TextColor3 = Color3.fromRGB(200, 200, 200)
-        progressText.TextXAlignment = Enum.TextXAlignment.Right
-        progressText.BackgroundTransparency = 1
-        progressText.Font = Enum.Font.Gotham
-        progressText.TextSize = 12
-        progressText.Parent = taskFrame
+        local progText = Instance.new("TextLabel")
+        progText.Size = UDim2.new(0, 80, 0, 18)
+        progText.Position = UDim2.new(1, -95, 0, 52)
+        progText.Text = "0/" .. task.required
+        progText.TextColor3 = Color3.fromRGB(200, 200, 200)
+        progText.TextXAlignment = Enum.TextXAlignment.Right
+        progText.BackgroundTransparency = 1
+        progText.Font = Enum.Font.Gotham
+        progText.TextSize = 12
+        progText.Parent = taskFrame
         
-        -- Claim button (initially disabled)
+        -- Simulate some random progress for demo
+        local randomProgress = math.random(0, task.required)
+        progressFill.Size = UDim2.new(randomProgress / task.required, 0, 1, 0)
+        progText.Text = randomProgress .. "/" .. task.required
+        
+        -- Claim button
         local claimBtn = Instance.new("TextButton")
-        claimBtn.Size = UDim2.new(0, 80, 0, 30)
-        claimBtn.Position = UDim2.new(1, -90, 0, 45)
-        claimBtn.Text = "🔒"
-        claimBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
-        claimBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-        claimBtn.AutoButtonColor = false
+        claimBtn.Size = UDim2.new(0, 70, 0, 28)
+        claimBtn.Position = UDim2.new(1, -85, 0, 50)
+        claimBtn.Text = "CLAIM"
+        claimBtn.TextColor3 = Color3.fromRGB(255, 200, 80)
+        claimBtn.BackgroundColor3 = Color3.fromRGB(60, 40, 20)
+        claimBtn.BorderSizePixel = 0
         claimBtn.Parent = taskFrame
         
         local btnCorner = Instance.new("UICorner")
         btnCorner.CornerRadius = UDim.new(0, 6)
         btnCorner.Parent = claimBtn
         
-        taskFrames[i] = {
-            frame = taskFrame,
-            fill = progressFill,
-            text = progressText,
-            claimBtn = claimBtn,
-            task = task,
-            current = task.current
-        }
-    end
-    
-    -- Function to update progress (you can connect this to your game events)
-    local function updateProgress(taskIndex, newValue)
-        local data = taskFrames[taskIndex]
-        if data and data.task then
-            data.current = math.min(newValue, data.task.required)
-            local percent = data.current / data.task.required
-            data.fill.Size = UDim2.new(percent, 0, 1, 0)
-            data.text.Text = data.current .. "/" .. data.task.required
-            
-            if data.current >= data.task.required then
-                data.claimBtn.Text = "🎁 CLAIM"
-                data.claimBtn.TextColor3 = Color3.fromRGB(255, 215, 100)
-                data.claimBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 30)
-                data.claimBtn.AutoButtonColor = true
-                
-                data.claimBtn.MouseButton1Click:Connect(function()
-                    -- Claim reward logic
-                    data.claimBtn.Text = "✓ CLAIMED"
-                    data.claimBtn.AutoButtonColor = false
-                    data.claimBtn.TextColor3 = Color3.fromRGB(100, 200, 100)
-                    
-                    -- Add tokens to player
-                    local tokens = player:FindFirstChild("Tokens")
-                    if tokens and tokens:IsA("IntValue") then
-                        local rewardAmount = tonumber(data.task.reward:match("%d+")) or 0
-                        tokens.Value = tokens.Value + rewardAmount
-                    end
-                    
-                    -- Show notification
-                    local notification = Instance.new("TextLabel")
-                    notification.Parent = mainFrame
-                    notification.Size = UDim2.new(0, 200, 0, 40)
-                    notification.Position = UDim2.new(0.5, -100, 1, -50)
-                    notification.Text = "✓ Claimed " .. data.task.reward
-                    notification.TextColor3 = Color3.fromRGB(100, 255, 100)
-                    notification.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-                    notification.BackgroundTransparency = 0.2
-                    notification.BorderSizePixel = 0
-                    
-                    local notifCorner = Instance.new("UICorner")
-                    notifCorner.CornerRadius = UDim.new(0, 8)
-                    notifCorner.Parent = notification
-                    
-                    game:GetService("Debris"):AddItem(notification, 2)
-                end)
-            end
+        if randomProgress >= task.required then
+            claimBtn.MouseButton1Click:Connect(function()
+                -- Add tokens
+                local tokens = player:FindFirstChild("Tokens")
+                if tokens and tokens:IsA("IntValue") then
+                    tokens.Value = tokens.Value + tonumber(task.reward)
+                end
+                claimBtn.Text = "✓ DONE"
+                claimBtn.AutoButtonColor = false
+                claimBtn.TextColor3 = Color3.fromRGB(100, 255, 100)
+                print("[Smileys] Claimed " .. task.reward .. " tokens!")
+            end)
+        else
+            claimBtn.Text = "🔒"
+            claimBtn.TextColor3 = Color3.fromRGB(150, 150, 150)
+            claimBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+            claimBtn.AutoButtonColor = false
         end
     end
     
-    -- Example: Update progress over time (for demonstration)
-    local progressIndex = 1
-    taskFrames[progressIndex].current = 5
-    updateProgress(progressIndex, 5)
+    -- Bottom buttons
+    local bottomFrame = Instance.new("Frame")
+    bottomFrame.Size = UDim2.new(1, 0, 0, 50)
+    bottomFrame.Position = UDim2.new(0, 0, 1, -50)
+    bottomFrame.BackgroundTransparency = 1
+    bottomFrame.Parent = mainFrame
     
-    -- Make the window draggable
+    local refreshBtn = Instance.new("TextButton")
+    refreshBtn.Size = UDim2.new(0, 100, 0, 35)
+    refreshBtn.Position = UDim2.new(0.5, -110, 0, 8)
+    refreshBtn.Text = "🔄 REFRESH"
+    refreshBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    refreshBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+    refreshBtn.BorderSizePixel = 0
+    refreshBtn.Parent = bottomFrame
+    
+    local refreshCorner = Instance.new("UICorner")
+    refreshCorner.CornerRadius = UDim.new(0, 6)
+    refreshCorner.Parent = refreshBtn
+    
+    refreshBtn.MouseButton1Click:Connect(function()
+        print("[Smileys] Refreshing rewards...")
+        for _, btn in pairs(bottomFrame.Parent:GetDescendants()) do
+            if btn:IsA("TextButton") and btn.Text == "🔄 REFRESH" then
+                -- Just visual feedback
+                btn.Text = "✓ REFRESHED"
+                wait(1)
+                btn.Text = "🔄 REFRESH"
+            end
+        end
+    end)
+    
+    local closeAllBtn = Instance.new("TextButton")
+    closeAllBtn.Size = UDim2.new(0, 100, 0, 35)
+    closeAllBtn.Position = UDim2.new(0.5, 10, 0, 8)
+    closeAllBtn.Text = "❌ CLOSE"
+    closeAllBtn.TextColor3 = Color3.fromRGB(255, 150, 150)
+    closeAllBtn.BackgroundColor3 = Color3.fromRGB(55, 40, 40)
+    closeAllBtn.BorderSizePixel = 0
+    closeAllBtn.Parent = bottomFrame
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 6)
+    closeCorner.Parent = closeAllBtn
+    
+    closeAllBtn.MouseButton1Click:Connect(function()
+        screenGui.Enabled = false
+    end)
+    
+    -- Make draggable
     local dragging = false
-    local dragStart
-    local startPos
+    local dragStart, startPos
     
     mainFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -279,10 +327,8 @@ local function createSmileysUI()
         end
     end)
     
-    mainFrame.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
+    mainFrame.InputEnded:Connect(function()
+        dragging = false
     end)
     
     game:GetService("UserInputService").InputChanged:Connect(function(input)
@@ -291,57 +337,47 @@ local function createSmileysUI()
             mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
+    
+    print("[Smileys] ✅ New Smileys menu created!")
 end
 
--- Try to restore/enable existing SmileysEvent
-if smileysFrame then
-    smileysFrame.Visible = true
-    -- Re-enable any LocalScripts inside
-    for _, child in ipairs(smileysFrame:GetDescendants()) do
-        if child:IsA("LocalScript") then
-            local success, err = pcall(function()
-                require(child)
-            end)
-            if not success then
-                warn("Failed to run script:", err)
-            end
-        end
-    end
-else
-    -- Create new UI if not found
-    createSmileysUI()
-end
-
--- Optional: Add a button to toggle the menu
-local function createToggleButton()
-    local toggleBtn = Instance.new("TextButton")
+-- Create toggle button
+local toggleBtn = playerGui:FindFirstChild("SmileysToggle")
+if not toggleBtn then
+    toggleBtn = Instance.new("TextButton")
     toggleBtn.Name = "SmileysToggle"
-    toggleBtn.Size = UDim2.new(0, 50, 0, 50)
-    toggleBtn.Position = UDim2.new(1, -60, 0, 10)
+    toggleBtn.Size = UDim2.new(0, 55, 0, 55)
+    toggleBtn.Position = UDim2.new(1, -70, 0, 10)
     toggleBtn.Text = "😊"
-    toggleBtn.TextSize = 24
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 200, 100)
-    toggleBtn.BackgroundTransparency = 0.2
+    toggleBtn.TextSize = 28
+    toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    toggleBtn.BackgroundTransparency = 0.4
+    toggleBtn.BorderSizePixel = 0
     toggleBtn.Parent = playerGui
     
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(1, 0)
-    btnCorner.Parent = toggleBtn
+    local toggleCorner = Instance.new("UICorner")
+    toggleCorner.CornerRadius = UDim.new(1, 0)
+    toggleCorner.Parent = toggleBtn
     
-    local isOpen = false
-    local smileysGui = playerGui:FindFirstChild("SmileysEvent")
+    local toggleStroke = Instance.new("UIStroke")
+    toggleStroke.Color = Color3.fromRGB(255, 200, 100)
+    toggleStroke.Thickness = 2
+    toggleStroke.Parent = toggleBtn
     
+    local smileyGui = playerGui:FindFirstChild("SmileysEvent")
     toggleBtn.MouseButton1Click:Connect(function()
-        if smileysGui and smileysGui:IsA("ScreenGui") then
-            smileysGui.Enabled = not smileysGui.Enabled
-        elseif not smileysGui then
-            createSmileysUI()
+        local gui = playerGui:FindFirstChild("SmileysEvent")
+        if gui then
+            gui.Enabled = not gui.Enabled
+            toggleBtn.BackgroundTransparency = gui.Enabled and 0.4 or 0.7
         end
     end)
+    
+    print("[Smileys] ✅ Toggle button added! (😊 in top-right)")
 end
 
--- Create toggle button if Smileys UI exists or after creation
-wait(0.5)
-if not playerGui:FindFirstChild("SmileysToggle") then
-    createToggleButton()
-end
+print("[Smileys] ====================================")
+print("[Smileys] ✅ Smileys menu is ready!")
+print("[Smileys] 📍 Click the 😊 button to open/close")
+print("[Smileys] 💰 Complete tasks to earn rewards")
+print("[Smileys] ====================================")
