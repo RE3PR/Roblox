@@ -1,164 +1,236 @@
---[[
-    INSTANCE COUNTER
-    - Shows total instances in the game
-    - Shows instances per service
-    - Simple GUI with results
---]]
+-- Roblox Game Dumper (Executor Script)
+-- Scans the specified services + all descendants
+-- Live UI with timer + instance counter
+-- Dumps full hierarchy tree to the exact path you requested
+-- Works in any executor that supports writefile/makefolder (Fluxus, Solara, Wave, etc.)
 
--- Create GUI
+local ServicesToDump = {
+    "Workspace",
+    "ReplicatedStorage",
+    "Players",
+    "Lighting",
+    "StarterGui",
+    "StarterPack",
+    "StarterPlayer",
+    "Teams",
+    "SoundService",
+    "ReplicatedFirst",
+    "ServerScriptService",
+    "ServerStorage",
+    "Chat",
+    "TextChatService"
+}
+
+local filePath = "C:\\Users\\RYZEN7 GAMER\\New Folder\\game_dump.txt"
+local folderPath = "C:\\Users\\RYZEN7 GAMER\\New Folder"
+
+-- Create nice UI
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
 local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "GameDumperUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+
 local mainFrame = Instance.new("Frame")
-local titleLabel = Instance.new("TextLabel")
-local totalLabel = Instance.new("TextLabel")
-local statusLabel = Instance.new("TextLabel")
-local serviceList = Instance.new("ScrollingFrame")
-local serviceListLayout = Instance.new("UIListLayout")
-local closeButton = Instance.new("TextButton")
-
-screenGui.Name = "InstanceCounter"
-screenGui.Parent = game:GetService("CoreGui")
-pcall(function() screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui") end)
-
-mainFrame.Size = UDim2.new(0, 400, 0, 350)
-mainFrame.Position = UDim2.new(0.5, -200, 0.5, -175)
-mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-mainFrame.BackgroundTransparency = 0.1
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 420, 0, 320)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
-titleLabel.Size = UDim2.new(1, 0, 0, 40)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-titleLabel.Text = "Instance Counter"
-titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-titleLabel.TextSize = 20
-titleLabel.Font = Enum.Font.GothamBold
-titleLabel.Parent = mainFrame
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = mainFrame
 
-totalLabel.Size = UDim2.new(1, 0, 0, 50)
-totalLabel.Position = UDim2.new(0, 0, 0, 45)
-totalLabel.BackgroundTransparency = 1
-totalLabel.Text = "Total: Counting..."
-totalLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-totalLabel.TextSize = 22
-totalLabel.Font = Enum.Font.GothamBold
-totalLabel.Parent = mainFrame
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 50)
+title.BackgroundTransparency = 1
+title.Text = "🔍 ROBLOX GAME DUMPER"
+title.TextColor3 = Color3.fromRGB(0, 255, 100)
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.Parent = mainFrame
 
-statusLabel.Size = UDim2.new(1, 0, 0, 30)
-statusLabel.Position = UDim2.new(0, 0, 0, 95)
+local timeLabel = Instance.new("TextLabel")
+timeLabel.Size = UDim2.new(1, -20, 0, 30)
+timeLabel.Position = UDim2.new(0, 10, 0, 60)
+timeLabel.BackgroundTransparency = 1
+timeLabel.Text = "Time elapsed: 0 seconds"
+timeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+timeLabel.TextScaled = true
+timeLabel.Font = Enum.Font.Gotham
+timeLabel.TextXAlignment = Enum.TextXAlignment.Left
+timeLabel.Parent = mainFrame
+
+local countLabel = Instance.new("TextLabel")
+countLabel.Size = UDim2.new(1, -20, 0, 30)
+countLabel.Position = UDim2.new(0, 10, 0, 95)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "Instances scanned: 0"
+countLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+countLabel.TextScaled = true
+countLabel.Font = Enum.Font.Gotham
+countLabel.TextXAlignment = Enum.TextXAlignment.Left
+countLabel.Parent = mainFrame
+
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 30)
+statusLabel.Position = UDim2.new(0, 10, 0, 130)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "Scanning game..."
-statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-statusLabel.TextSize = 12
+statusLabel.Text = "Starting scan..."
+statusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.GothamSemibold
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = mainFrame
 
-serviceList.Size = UDim2.new(0.9, 0, 0, 160)
-serviceList.Position = UDim2.new(0.05, 0, 0, 130)
-serviceList.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-serviceList.BorderSizePixel = 0
-serviceList.CanvasSize = UDim2.new(0, 0, 0, 0)
-serviceList.ScrollBarThickness = 5
-serviceList.Parent = mainFrame
+local progressBarBg = Instance.new("Frame")
+progressBarBg.Size = UDim2.new(1, -20, 0, 8)
+progressBarBg.Position = UDim2.new(0, 10, 0, 170)
+progressBarBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+progressBarBg.BorderSizePixel = 0
+progressBarBg.Parent = mainFrame
+local progressCorner = Instance.new("UICorner")
+progressCorner.CornerRadius = UDim.new(1, 0)
+progressCorner.Parent = progressBarBg
 
-serviceListLayout.Parent = serviceList
-serviceListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-serviceListLayout.Padding = UDim.new(0, 2)
+local progressBar = Instance.new("Frame")
+progressBar.Size = UDim2.new(0, 0, 1, 0)
+progressBar.BackgroundColor3 = Color3.fromRGB(0, 255, 100)
+progressBar.BorderSizePixel = 0
+progressBar.Parent = progressBarBg
+local progressCorner2 = Instance.new("UICorner")
+progressCorner2.CornerRadius = UDim.new(1, 0)
+progressCorner2.Parent = progressBar
 
-closeButton.Size = UDim2.new(0, 100, 0, 30)
-closeButton.Position = UDim2.new(0.5, -50, 0, 305)
-closeButton.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-closeButton.Text = "Close"
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.TextSize = 14
-closeButton.Font = Enum.Font.GothamBold
-closeButton.Parent = mainFrame
+-- Make the UI draggable
+local dragging = false
+local dragInput
+local dragStart
+local startPos
 
-closeButton.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
+local function updateDrag(input)
+    local delta = input.Position - dragStart
+    mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
 end)
 
--- Function to format numbers with commas
-local function formatNumber(num)
-    return tostring(num):reverse():gsub("%d%d%d", "%1,"):reverse():gsub("^,", "")
+title.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        updateDrag(input)
+    end
+end)
+
+-- Start scanning (DFS iterative for proper tree order + live updates)
+local startTime = os.clock()
+local instanceCount = 0
+local dumpLines = {}
+
+-- Prepare stack for DFS (depth-first so children stay grouped under parents)
+local stack = {}
+
+for _, serviceName in ipairs(ServicesToDump) do
+    local success, service = pcall(function()
+        return game:GetService(serviceName)
+    end)
+    if success and service then
+        table.insert(stack, {instance = service, indent = ""})
+    end
 end
 
--- Count instances
-local function countInstances()
-    statusLabel.Text = "Counting instances (this may take a moment)..."
-    task.wait(0.5)
-    
-    local total = 0
-    local serviceCounts = {}
-    
-    -- Count all instances in game
-    for _, inst in ipairs(game:GetDescendants()) do
-        total = total + 1
-        if total % 1000 == 0 then
-            statusLabel.Text = "Counting: " .. formatNumber(total) .. " instances so far..."
-            task.wait()
-        end
+statusLabel.Text = "Scanning game hierarchy..."
+
+while #stack > 0 do
+    local current = table.remove(stack)  -- LIFO = DFS
+    local inst = current.instance
+    local indent = current.indent
+
+    -- Build tree line
+    local line = indent .. "[" .. inst.ClassName .. "] " .. inst.Name
+    table.insert(dumpLines, line)
+
+    instanceCount = instanceCount + 1
+
+    -- Live UI update every 150 instances (smooth + no lag)
+    if instanceCount % 150 == 0 then
+        local elapsed = os.clock() - startTime
+        timeLabel.Text = "Time elapsed: " .. math.floor(elapsed) .. " seconds"
+        countLabel.Text = "Instances scanned: " .. instanceCount
+        progressBar.Size = UDim2.new(math.clamp(instanceCount / 5000, 0, 1), 0, 1, 0)  -- rough progress
+        task.wait()  -- yield so UI actually renders
     end
-    
-    -- Count game itself
-    total = total + 1
-    
-    -- Count per service
-    for _, service in ipairs(game:GetChildren()) do
-        local serviceTotal = 1 -- Count the service itself
-        for _, inst in ipairs(service:GetDescendants()) do
-            serviceTotal = serviceTotal + 1
-        end
-        serviceCounts[service.Name] = serviceTotal
+
+    -- Add children to stack (in reverse so original order is preserved)
+    local children = inst:GetChildren()
+    for i = #children, 1, -1 do
+        table.insert(stack, {
+            instance = children[i],
+            indent = indent .. "  "
+        })
     end
-    
-    -- Update total label
-    totalLabel.Text = "Total: " .. formatNumber(total) .. " instances"
-    statusLabel.Text = "Scan complete!"
-    
-    -- Sort services by count (largest first)
-    local sortedServices = {}
-    for name, count in pairs(serviceCounts) do
-        table.insert(sortedServices, {name = name, count = count})
-    end
-    table.sort(sortedServices, function(a, b) return a.count > b.count end)
-    
-    -- Create service list labels
-    for _, service in ipairs(sortedServices) do
-        local serviceLabel = Instance.new("TextLabel")
-        serviceLabel.Size = UDim2.new(1, 0, 0, 25)
-        serviceLabel.BackgroundTransparency = 1
-        serviceLabel.Text = service.name .. ": " .. formatNumber(service.count) .. " instances"
-        serviceLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        serviceLabel.TextSize = 12
-        serviceLabel.TextXAlignment = Enum.TextXAlignment.Left
-        serviceLabel.Parent = serviceList
-        
-        -- Color code based on size
-        if service.count > 10000 then
-            serviceLabel.TextColor3 = Color3.fromRGB(255, 150, 150)
-        elseif service.count > 5000 then
-            serviceLabel.TextColor3 = Color3.fromRGB(255, 200, 150)
-        elseif service.count > 1000 then
-            serviceLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
-        end
-    end
-    
-    -- Update canvas size for scrolling
-    serviceList.CanvasSize = UDim2.new(0, 0, 0, #sortedServices * 27)
-    
-    -- Print to console
-    print("\n========== INSTANCE COUNT ==========")
-    print("Total instances: " .. formatNumber(total))
-    print("")
-    print("Service breakdown:")
-    for _, service in ipairs(sortedServices) do
-        print("  " .. service.name .. ": " .. formatNumber(service.count))
-    end
-    print("====================================")
-    
-    return total
 end
 
--- Start counting
-coroutine.wrap(function()
-    countInstances()
-end)()
+-- Final UI update
+local totalTime = os.clock() - startTime
+timeLabel.Text = "Time elapsed: " .. string.format("%.2f", totalTime) .. " seconds"
+countLabel.Text = "Instances scanned: " .. instanceCount
+statusLabel.Text = "Scan complete! Writing file..."
+progressBar.Size = UDim2.new(1, 0, 1, 0)
+
+-- Ensure folder exists
+pcall(function()
+    if not isfolder(folderPath) then
+        makefolder(folderPath)
+    end
+end)
+
+-- Write the full dump
+local fullDump = table.concat(dumpLines, "\n") .. "\n\n-- Dump finished in " .. string.format("%.2f", totalTime) .. " seconds. Total instances: " .. instanceCount
+
+local writeSuccess, writeErr = pcall(function()
+    writefile(filePath, fullDump)
+end)
+
+if writeSuccess then
+    statusLabel.Text = "✅ SUCCESS! File saved to:"
+    local pathLabel = Instance.new("TextLabel")
+    pathLabel.Size = UDim2.new(1, -20, 0, 60)
+    pathLabel.Position = UDim2.new(0, 10, 0, 190)
+    pathLabel.BackgroundTransparency = 1
+    pathLabel.Text = filePath
+    pathLabel.TextColor3 = Color3.fromRGB(0, 255, 100)
+    pathLabel.TextScaled = true
+    pathLabel.TextWrapped = true
+    pathLabel.Font = Enum.Font.Code
+    pathLabel.Parent = mainFrame
+else
+    statusLabel.Text = "❌ Failed to write file"
+    local errLabel = Instance.new("TextLabel")
+    errLabel.Size = UDim2.new(1, -20, 0, 80)
+    errLabel.Position = UDim2.new(0, 10, 0, 190)
+    errLabel.BackgroundTransparency = 1
+    errLabel.Text = "Error: " .. tostring(writeErr) .. "\n\nMake sure the folder exists and your executor allows full path writing."
+    errLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+    errLabel.TextScaled = true
+    errLabel.TextWrapped = true
+    errLabel.Font = Enum.Font.Gotham
+    errLabel.Parent = mainFrame
+end
+
+print("Game dump completed! " .. instanceCount .. " instances saved to " .. filePath)
