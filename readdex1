@@ -1,0 +1,170 @@
+-- SIMPLE EXPLORER DUMPER WITH GUI TIMER
+-- Copy this ENTIRE script into your executor
+
+local outputPath = "C:\\Users\\RYZEN7 GAMER\\New folder\\game_dump.txt"
+local startTime = tick()
+local totalInstances = 0
+local isRunning = true
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+local mainFrame = Instance.new("Frame")
+local timerLabel = Instance.new("TextLabel")
+local statusLabel = Instance.new("TextLabel")
+local countLabel = Instance.new("TextLabel")
+local closeButton = Instance.new("TextButton")
+
+screenGui.Name = "DumperGUI"
+screenGui.Parent = game:GetService("CoreGui")
+
+mainFrame.Size = UDim2.new(0, 350, 0, 200)
+mainFrame.Position = UDim2.new(0.5, -175, 0.5, -100)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.Parent = screenGui
+
+timerLabel.Size = UDim2.new(1, 0, 0, 50)
+timerLabel.Position = UDim2.new(0, 0, 0, 30)
+timerLabel.BackgroundTransparency = 1
+timerLabel.Text = "Time: 0:00"
+timerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+timerLabel.TextSize = 24
+timerLabel.Font = Enum.Font.GothamBold
+timerLabel.Parent = mainFrame
+
+statusLabel.Size = UDim2.new(1, 0, 0, 30)
+statusLabel.Position = UDim2.new(0, 0, 0, 80)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Starting..."
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.TextSize = 14
+statusLabel.Parent = mainFrame
+
+countLabel.Size = UDim2.new(1, 0, 0, 30)
+countLabel.Position = UDim2.new(0, 0, 0, 110)
+countLabel.BackgroundTransparency = 1
+countLabel.Text = "Instances: 0"
+countLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+countLabel.TextSize = 12
+countLabel.Parent = mainFrame
+
+closeButton.Size = UDim2.new(0, 100, 0, 30)
+closeButton.Position = UDim2.new(0.5, -50, 0, 150)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.Text = "Cancel"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Parent = mainFrame
+
+-- Timer update
+coroutine.wrap(function()
+    while isRunning and screenGui.Parent do
+        local elapsed = tick() - startTime
+        local minutes = math.floor(elapsed / 60)
+        local seconds = math.floor(elapsed % 60)
+        timerLabel.Text = string.format("Time: %d:%02d", minutes, seconds)
+        task.wait(0.1)
+    end
+end)()
+
+-- Cancel button
+closeButton.MouseButton1Click:Connect(function()
+    isRunning = false
+    statusLabel.Text = "Cancelled!"
+    task.wait(1)
+    screenGui:Destroy()
+end)
+
+-- Dump function
+local results = {}
+local function dump(inst, depth)
+    if not isRunning then return end
+    
+    local indent = string.rep("  ", depth)
+    local name = inst.Name ~= "" and inst.Name or "Unnamed"
+    table.insert(results, indent .. name .. " (" .. inst.ClassName .. ")")
+    totalInstances = totalInstances + 1
+    
+    if totalInstances % 500 == 0 then
+        countLabel.Text = "Instances: " .. totalInstances
+        statusLabel.Text = "Scanning: " .. inst.ClassName
+        task.wait()
+    end
+    
+    for _, child in ipairs(inst:GetChildren()) do
+        dump(child, depth + 1)
+        task.wait(0.001)
+    end
+end
+
+-- Start dump
+statusLabel.Text = "Dumping game explorer..."
+task.wait(0.5)
+
+dump(game, 0)
+
+-- Save results
+local output = table.concat(results, "\n")
+local success = false
+
+-- Try to save to the specified path
+local fileSaved = false
+
+-- Method 1: Using writefile (most executors support this)
+if writefile then
+    -- Create the folder path (convert backslashes to forward slashes for Lua)
+    local folderPath = "C:/Users/RYZEN7 GAMER/New folder/"
+    local fullPath = folderPath .. "game_dump.txt"
+    
+    -- Try to create folder if possible (some executors support makefolder)
+    if makefolder then
+        pcall(function() makefolder(folderPath) end)
+    end
+    
+    -- Write the file
+    local success2, err = pcall(function()
+        writefile(fullPath, output)
+    end)
+    
+    if success2 then
+        success = true
+        fileSaved = true
+        statusLabel.Text = "Saved to: " .. fullPath
+    else
+        -- Fallback to default location if path fails
+        pcall(function()
+            writefile("game_dump.txt", output)
+            success = true
+            fileSaved = true
+            statusLabel.Text = "Saved to: game_dump.txt (default location)"
+        end)
+    end
+end
+
+-- Method 2: Fallback to clipboard
+if not fileSaved and setclipboard then
+    setclipboard(output)
+    success = true
+    statusLabel.Text = "Copied to clipboard!"
+end
+
+-- Method 3: Final fallback
+if not fileSaved and not success then
+    statusLabel.Text = "ERROR: No save method"
+end
+
+local elapsed = tick() - startTime
+local minutes = math.floor(elapsed / 60)
+local seconds = math.floor(elapsed % 60)
+
+timerLabel.Text = string.format("Done! %d:%02d", minutes, seconds)
+countLabel.Text = "Total: " .. totalInstances .. " instances"
+
+print("=== DUMP COMPLETE ===")
+print("Time: " .. minutes .. "m " .. seconds .. "s")
+print("Instances: " .. totalInstances)
+if success then
+    print("Saved to: " .. outputPath)
+end
+
+task.wait(3)
+screenGui:Destroy()
