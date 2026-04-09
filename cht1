@@ -1,16 +1,16 @@
 local player = game.Players.LocalPlayer
 local claimRemote = game.ReplicatedStorage:WaitForChild("Events"):WaitForChild("ClaimMaxSize")
 
--- Create the custom GUI
+-- Create GUI
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FreeMaxSmileysGui"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 260, 0, 140)
-frame.Position = UDim2.new(0.75, 0, 0.2, 0)
-frame.BackgroundColor3 = Color3.fromRGB(0, 90, 0)
+frame.Size = UDim2.new(0, 260, 0, 150)
+frame.Position = UDim2.new(0.75, 0, 0.15, 0)
+frame.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
 
@@ -18,105 +18,97 @@ local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 12)
 uiCorner.Parent = frame
 
--- Title
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -50, 0.35, 0)
+title.Size = UDim2.new(1, -50, 0.3, 0)
 title.Position = UDim2.new(0, 15, 0, 8)
 title.BackgroundTransparency = 1
 title.Text = "FREE MAX SIZE (Smileys)"
-title.TextColor3 = Color3.new(1, 1, 1)
+title.TextColor3 = Color3.new(1,1,1)
 title.TextScaled = true
 title.Font = Enum.Font.GothamBold
 title.Parent = frame
 
--- Close Button (X)
-local closeButton = Instance.new("TextButton")
-closeButton.Size = UDim2.new(0, 34, 0, 34)
-closeButton.Position = UDim2.new(1, -40, 0, 8)
-closeButton.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-closeButton.Text = "X"
-closeButton.TextColor3 = Color3.new(1, 1, 1)
-closeButton.TextScaled = true
-closeButton.Font = Enum.Font.GothamBold
-closeButton.Parent = frame
+-- Close X
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 34, 0, 34)
+closeBtn.Position = UDim2.new(1, -40, 0, 8)
+closeBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.new(1,1,1)
+closeBtn.TextScaled = true
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = frame
 
 local closeCorner = Instance.new("UICorner")
 closeCorner.CornerRadius = UDim.new(0, 8)
-closeCorner.Parent = closeButton
+closeCorner.Parent = closeBtn
 
--- Main Claim Button
-local claimButton = Instance.new("TextButton")
-claimButton.Size = UDim2.new(1, -30, 0.45, 0)
-claimButton.Position = UDim2.new(0, 15, 0.42, 0)
-claimButton.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-claimButton.Text = "CLAIM FREE MAX SIZE"
-claimButton.TextColor3 = Color3.new(1, 1, 1)
-claimButton.TextScaled = true
-claimButton.Font = Enum.Font.GothamSemibold
-claimButton.Parent = frame
+-- Claim Button
+local claimBtn = Instance.new("TextButton")
+claimBtn.Size = UDim2.new(1, -30, 0.45, 0)
+claimBtn.Position = UDim2.new(0, 15, 0.38, 0)
+claimBtn.BackgroundColor3 = Color3.fromRGB(0, 190, 0)
+claimBtn.Text = "CLAIM +1 FREE MAX SIZE"
+claimBtn.TextColor3 = Color3.new(1,1,1)
+claimBtn.TextScaled = true
+claimBtn.Font = Enum.Font.GothamSemibold
+claimBtn.Parent = frame
 
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 10)
-buttonCorner.Parent = claimButton
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 10)
+btnCorner.Parent = claimBtn
 
--- Status label
 local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -30, 0.15, 0)
-status.Position = UDim2.new(0, 15, 0.9, 0)
+status.Size = UDim2.new(1, -30, 0.18, 0)
+status.Position = UDim2.new(0, 15, 0.85, 0)
 status.BackgroundTransparency = 1
-status.Text = "Ready"
+status.Text = "Click to claim"
 status.TextColor3 = Color3.fromRGB(200, 255, 200)
 status.TextScaled = true
 status.Font = Enum.Font.Gotham
 status.Parent = frame
 
--- Draggable functionality
-local dragging = false
-local dragStart, startPos
-
-frame.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+-- Make draggable
+local dragging, dragStart, startPos
+frame.InputBegan:Connect(function(inp)
+	if inp.UserInputType == Enum.UserInputType.MouseButton1 then
 		dragging = true
-		dragStart = input.Position
+		dragStart = inp.Position
 		startPos = frame.Position
 	end
 end)
-
-frame.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = false
-	end
+frame.InputEnded:Connect(function(inp)
+	if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
 end)
-
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-		local delta = input.Position - dragStart
+game:GetService("UserInputService").InputChanged:Connect(function(inp)
+	if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = inp.Position - dragStart
 		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
 	end
 end)
 
--- Claim function (this is what bypasses the check)
-local function claimFreeMax()
-	-- Force unlimited free claims locally (this is the "checkbox completed task" part)
-	local smileysPromo = player:WaitForChild("SmileysPromo")
-	local freeMax = smileysPromo:WaitForChild("FreeMax")
-	freeMax.Value = 999   -- You now have 999 free max sizes
-
-	-- Fire the real reward remote
+-- The actual claim function (1 per click)
+local function claimOneMax()
+	local smileysPromo = player:WaitForChild("SmileysPromo", 5)
+	if smileysPromo then
+		local freeMax = smileysPromo:FindFirstChild("FreeMax")
+		if freeMax then
+			freeMax.Value = 5  -- Give it some buffer
+		end
+	end
+	
+	-- Fire the remote (exactly as the game does)
 	claimRemote:FireServer()
-
-	status.Text = "✅ +1 MAX SIZE CLAIMED!"
-	task.wait(1.2)
-	status.Text = "Ready - Click again!"
+	
+	status.Text = "✅ Claimed +1 Max Size!"
+	task.wait(1)
+	status.Text = "Click to claim again"
 end
 
--- Button click
-claimButton.MouseButton1Click:Connect(claimFreeMax)
+claimBtn.MouseButton1Click:Connect(claimOneMax)
 
--- Close button
-closeButton.MouseButton1Click:Connect(function()
+closeBtn.MouseButton1Click:Connect(function()
 	screenGui:Destroy()
-	print("Free Max Size GUI closed")
 end)
 
-print("✅ Free Max Size (Smileys) GUI loaded! Drag the box, click the green button.")
+print("Free Max Size GUI loaded - Click the green button")
