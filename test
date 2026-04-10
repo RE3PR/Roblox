@@ -1,6 +1,4 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
--- Tạo cửa sổ chính
 local Window = Rayfield:CreateWindow({
     Name = "SileyHub | Saiky",
     Icon = 0,
