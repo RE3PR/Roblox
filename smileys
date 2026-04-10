@@ -1,264 +1,110 @@
---[[
-    Enhanced Auto-Eat GUI for your game (based on provided datamodel)
-    Teleports to map center, sets EatSpeed=100, eats every 10ms.
-    Press Start (or X to stop).
---]]
+-- Remote Enumeration & Clipboard Export Script
+-- Scans: ReplicatedStorage, Workspace, Players.LocalPlayer, Lighting, StarterGui, StarterPack, etc.
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
-
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+local StarterPack = game:GetService("StarterPack")
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 
--- ========== 1. FIND MAP CENTER (based on your Map folder) ==========
-local function getMapCenter()
-    -- Check for explicit "Center" part
-    local centerPart = Workspace:FindFirstChild("Center")
-    if centerPart and centerPart:IsA("BasePart") then
-        return centerPart.Position
-    end
-
-    -- Use average position of all parts inside "Map" folder
-    local mapFolder = Workspace:FindFirstChild("Map")
-    if mapFolder and mapFolder:IsA("Folder") then
-        local total = Vector3.new(0,0,0)
-        local count = 0
-        for _, part in ipairs(mapFolder:GetDescendants()) do
-            if part:IsA("BasePart") then
-                total = total + part.Position
-                count = count + 1
-            end
+-- Helper to collect all relevant objects from a container recursively
+local function collectRemotes(container, list, path)
+    path = path or container:GetFullName()
+    for _, child in ipairs(container:GetChildren()) do
+        local childPath = path .. "." .. child.Name
+        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or 
+           child:IsA("BindableEvent") or child:IsA("BindableFunction") then
+            table.insert(list, {
+                Type = child.ClassName,
+                Path = childPath,
+                Object = child
+            })
         end
-        if count > 0 then
-            return total / count
+        -- Recurse into non-service folders (avoid massive recursion into services)
+        if child:IsA("Folder") or child:IsA("Model") or child:IsA("Configuration") then
+            collectRemotes(child, list, childPath)
         end
     end
-
-    -- Fallback: raycast to ground at (0,500,0)
-    local rayParams = RaycastParams.new()
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-    rayParams.FilterDescendantsInstances = {character}
-    local rayResult = Workspace:Raycast(Vector3.new(0, 500, 0), Vector3.new(0, -1000, 0), rayParams)
-    if rayResult then
-        return Vector3.new(0, rayResult.Position.Y + 3, 0)
-    end
-    return Vector3.new(0, 50, 0)
 end
 
--- ========== 2. SET EAT SPEED TO 100 ==========
-local function setEatSpeed()
-    local upgrades = player:FindFirstChild("Upgrades")
-    if upgrades then
-        local eatSpeed = upgrades:FindFirstChild("EatSpeed")
-        if eatSpeed and eatSpeed:IsA("NumberValue") then
-            eatSpeed.Value = 100
-            warn("[AutoEat] EatSpeed set to 100")
-        else
-            warn("[AutoEat] EatSpeed NumberValue not found")
-        end
+-- Main collection table
+local allRemotes = {}
+
+-- Scan common containers
+local containersToScan = {
+    ReplicatedStorage,
+    Workspace,
+    player, -- Player instance (PlayerGui, Backpack, PlayerScripts, etc.)
+    Lighting,
+    StarterGui,
+    StarterPack,
+}
+
+-- Also scan the DataModel root (game) but limit depth to avoid massive output
+collectRemotes(game, allRemotes, "game")
+
+-- Remove duplicates by path (some objects may appear multiple times if containers overlap)
+local uniqueRemotes = {}
+local seenPaths = {}
+for _, entry in ipairs(allRemotes) do
+    if not seenPaths[entry.Path] then
+        seenPaths[entry.Path] = true
+        table.insert(uniqueRemotes, entry)
+    end
+end
+
+-- Sort by type then path
+table.sort(uniqueRemotes, function(a, b)
+    if a.Type == b.Type then
+        return a.Path < b.Path
     else
-        warn("[AutoEat] Upgrades folder missing")
+        return a.Type < b.Type
     end
-end
-
--- ========== 3. TELEPORT TO CENTER ==========
-local function teleportToCenter()
-    local center = getMapCenter()
-    if humanoidRootPart and humanoidRootPart.Parent then
-        humanoidRootPart.CFrame = CFrame.new(center)
-        task.wait(0.1)
-    end
-end
-
--- ========== 4. FIND THE EAT REMOTE (improved detection) ==========
-local eatRemote = nil
-local function findEatRemote()
-    -- Common names for eat remote in such games
-    local remoteNames = {"Eat", "EatTarget", "Consume", "EatFragment", "EatToken", "EatPlayer"}
-    for _, name in ipairs(remoteNames) do
-        local remote = ReplicatedStorage:FindFirstChild(name)
-        if remote and remote:IsA("RemoteEvent") then
-            eatRemote = remote
-            warn("[AutoEat] Found eat remote:", name)
-            return
-        end
-    end
-    -- Search entire game (once)
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") and table.find(remoteNames, obj.Name) then
-            eatRemote = obj
-            warn("[AutoEat] Found eat remote:", obj.Name)
-            return
-        end
-    end
-    warn("[AutoEat] No eat remote found. Auto-eat will not work.")
-end
-
--- ========== 5. FIND NEAREST EDIBLE (based on your datamodel) ==========
-local function getNearestEdible()
-    local rootPos = humanoidRootPart and humanoidRootPart.Position
-    if not rootPos then return nil end
-
-    local closest = nil
-    local closestDist = math.huge
-
-    -- Option A: Eat other players (if preference enabled)
-    local preferences = player:FindFirstChild("Preferences")
-    local eatPlayers = preferences and preferences:FindFirstChild("Eat Players")
-    if eatPlayers and eatPlayers:IsA("BoolValue") and eatPlayers.Value then
-        for _, other in ipairs(Players:GetPlayers()) do
-            if other ~= player then
-                local otherChar = other.Character
-                if otherChar and otherChar:FindFirstChild("HumanoidRootPart") then
-                    local otherHRP = otherChar.HumanoidRootPart
-                    local dist = (otherHRP.Position - rootPos).Magnitude
-                    if dist < closestDist and dist < 20 then
-                        closest = otherHRP
-                        closestDist = dist
-                    end
-                end
-            end
-        end
-    end
-
-    -- Option B: Edible parts from your Map structure (Fragmentable, Token, etc.)
-    local mapFolder = Workspace:FindFirstChild("Map")
-    if mapFolder then
-        -- Look for Fragmentable folder inside Map
-        local fragmentable = mapFolder:FindFirstChild("Fragmentable")
-        if fragmentable then
-            for _, part in ipairs(fragmentable:GetChildren()) do
-                if part:IsA("BasePart") then
-                    local dist = (part.Position - rootPos).Magnitude
-                    if dist < closestDist and dist < 30 then
-                        closest = part
-                        closestDist = dist
-                    end
-                end
-            end
-        end
-        -- Also look for Token objects (they appear in MaterialService and elsewhere)
-        for _, token in ipairs(Workspace:GetDescendants()) do
-            if token.Name == "Token" and token:IsA("BasePart") then
-                local dist = (token.Position - rootPos).Magnitude
-                if dist < closestDist and dist < 30 then
-                    closest = token
-                    closestDist = dist
-                end
-            end
-        end
-    end
-
-    return closest
-end
-
--- ========== 6. AUTO-EAT LOOP (10ms interval) ==========
-local eating = false
-local eatConnection = nil
-
-local function startAutoEat()
-    if eatConnection then return end
-    if not eatRemote then
-        warn("[AutoEat] No remote – cannot start")
-        return
-    end
-
-    eating = true
-    eatConnection = RunService.Heartbeat:Connect(function()
-        if not eating then return end
-        if not character or not character.Parent then
-            character = player.Character
-            if not character then return end
-            humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-            if not humanoidRootPart then return end
-        end
-
-        local target = getNearestEdible()
-        if target and eatRemote then
-            pcall(function()
-                eatRemote:FireServer(target)
-            end)
-        end
-    end)
-    warn("[AutoEat] Started (10ms loop)")
-end
-
-local function stopAutoEat()
-    eating = false
-    if eatConnection then
-        eatConnection:Disconnect()
-        eatConnection = nil
-        warn("[AutoEat] Stopped")
-    end
-end
-
--- ========== 7. CREATE GUI ==========
-local function setupGui()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "AutoEatGUI"
-    screenGui.Parent = player:WaitForChild("PlayerGui")
-
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 220, 0, 110)
-    mainFrame.Position = UDim2.new(0.5, -110, 0.5, -55)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
-    mainFrame.BackgroundTransparency = 0.15
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = screenGui
-
-    local startBtn = Instance.new("TextButton")
-    startBtn.Size = UDim2.new(0, 90, 0, 40)
-    startBtn.Position = UDim2.new(0, 10, 0, 10)
-    startBtn.Text = "Start"
-    startBtn.BackgroundColor3 = Color3.fromRGB(0,180,0)
-    startBtn.Parent = mainFrame
-    startBtn.MouseButton1Click:Connect(function()
-        teleportToCenter()
-        setEatSpeed()
-        startAutoEat()
-        statusLabel.Text = "Auto-eating (10ms)"
-    end)
-
-    local stopBtn = Instance.new("TextButton")
-    stopBtn.Size = UDim2.new(0, 90, 0, 40)
-    stopBtn.Position = UDim2.new(0, 120, 0, 10)
-    stopBtn.Text = "Stop (X)"
-    stopBtn.BackgroundColor3 = Color3.fromRGB(180,0,0)
-    stopBtn.Parent = mainFrame
-    stopBtn.MouseButton1Click:Connect(function()
-        stopAutoEat()
-        statusLabel.Text = "Stopped"
-    end)
-
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(0, 200, 0, 25)
-    statusLabel.Position = UDim2.new(0, 10, 0, 65)
-    statusLabel.Text = "Idle"
-    statusLabel.TextColor3 = Color3.new(1,1,1)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Font = Enum.Font.GothamBold
-    statusLabel.TextSize = 14
-    statusLabel.Parent = mainFrame
-
-    -- X key to stop
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode.X then
-            stopAutoEat()
-            statusLabel.Text = "Stopped (X)"
-        end
-    end)
-end
-
--- ========== INITIALIZATION ==========
-player.CharacterAdded:Connect(function(newChar)
-    character = newChar
-    humanoidRootPart = character:WaitForChild("HumanoidRootPart")
 end)
 
-findEatRemote()
-setupGui()
+-- Build output string
+local outputLines = {"=== REMOTE EVENTS / FUNCTIONS / BINDABLES ===\n"}
+local typeGroups = {}
+for _, entry in ipairs(uniqueRemotes) do
+    if not typeGroups[entry.Type] then
+        typeGroups[entry.Type] = {}
+    end
+    table.insert(typeGroups[entry.Type], entry.Path)
+end
+
+for _, typeName in ipairs({"RemoteEvent", "RemoteFunction", "BindableEvent", "BindableFunction"}) do
+    local paths = typeGroups[typeName]
+    if paths then
+        table.insert(outputLines, string.format("\n-- %s (%d) --", typeName, #paths))
+        for _, path in ipairs(paths) do
+            table.insert(outputLines, path)
+        end
+    end
+end
+
+local outputText = table.concat(outputLines, "\n")
+
+-- Print to console
+print(outputText)
+
+-- Copy to clipboard (supports common exploit executors)
+local success, err = pcall(function()
+    if setclipboard then
+        setclipboard(outputText)
+    elseif syn and syn.write_clipboard then
+        syn.write_clipboard(outputText)
+    elseif write_clipboard then
+        write_clipboard(outputText)
+    else
+        error("No clipboard function found")
+    end
+end)
+
+if success then
+    print("\n✅ List copied to clipboard!")
+else
+    print("\n⚠️ Could not copy to clipboard: " .. tostring(err))
+    print("Manual copy the output above.")
+end
