@@ -1,107 +1,117 @@
--- Roblox Executor Script: Find all RemoteEvents/RemoteFunctions and other server-save mechanisms
--- This script scans the entire game hierarchy, lists all relevant instances,
--- and copies the results to your clipboard.
+--[[
+    Roblox Executor Script: Find all RemoteEvents/RemoteFunctions + potential server-save mechanisms
+    - Safely handles missing services (like ServerStorage)
+    - Copies everything to clipboard
+--]]
 
--- Helper function to get full path of an instance
 local function getFullPath(instance)
-    local path = instance.Name
-    local parent = instance.Parent
-    while parent do
-        path = parent.Name .. "/" .. path
-        parent = parent.Parent
+    local parts = {}
+    local current = instance
+    while current do
+        table.insert(parts, 1, current.Name)
+        current = current.Parent
     end
-    return path
+    return table.concat(parts, "/")
 end
 
--- Helper function to check if an instance is a remote that can send data to server
-local function isServerSavingRemote(instance)
-    local className = instance.ClassName
-    return className == "RemoteEvent" or className == "RemoteFunction"
-    -- Note: UnreliableRemoteEvent also exists but is similar; add if needed
-    -- Also, BindableEvent/BindableFunction are client-only, so not included.
+local function isRemote(instance)
+    local class = instance.ClassName
+    return class == "RemoteEvent" or class == "RemoteFunction" or class == "UnreliableRemoteEvent"
 end
 
--- Main collection
-local findings = {
-    remotes = {},      -- list of remote objects
-    others = {}        -- any other potential server-save mechanisms (e.g., custom objects)
-}
+-- Collect findings
+local remotes = {}
+local saveRelated = {}
 
--- Recursively traverse all instances
+-- Recursive scanner
 local function scan(instance)
-    if isServerSavingRemote(instance) then
-        table.insert(findings.remotes, {
+    if isRemote(instance) then
+        table.insert(remotes, {
             name = instance.Name,
-            className = instance.ClassName,
+            class = instance.ClassName,
             path = getFullPath(instance)
         })
     end
-    -- Check for custom named objects that might be used as remotes (unlikely but thorough)
-    if instance:IsA("Instance") and (instance.Name:lower():find("save") or instance.Name:lower():find("data")) then
-        table.insert(findings.others, {
+    -- Also catch any instance with "save" or "data" in name (custom server-save attempts)
+    local lowerName = instance.Name:lower()
+    if lowerName:find("save") or lowerName:find("data") then
+        table.insert(saveRelated, {
             name = instance.Name,
-            className = instance.ClassName,
+            class = instance.ClassName,
             path = getFullPath(instance)
         })
     end
-    -- Recursively scan children
     for _, child in ipairs(instance:GetChildren()) do
         scan(child)
     end
 end
 
--- Start scanning from game roots
-local roots = {game.Workspace, game.ReplicatedStorage, game.Lighting, game.ServerStorage, game.Players, game.StarterGui, game.StarterPack, game.StarterPlayer}
-for _, root in ipairs(roots) do
+-- Define possible root containers (only those that actually exist)
+local potentialRoots = {
+    game.Workspace,
+    game.ReplicatedStorage,
+    game.Lighting,
+    game.Players,
+    game.StarterGui,
+    game.StarterPack,
+    game.StarterPlayer
+}
+-- Also check ServerStorage and ServerScriptService if they exist (they often don't on client)
+if game:FindFirstChild("ServerStorage") then
+    table.insert(potentialRoots, game.ServerStorage)
+end
+if game:FindFirstChild("ServerScriptService") then
+    table.insert(potentialRoots, game.ServerScriptService)
+end
+
+-- Scan each existing root
+for _, root in ipairs(potentialRoots) do
     if root then
         scan(root)
     end
 end
 
--- Build output string
-local outputLines = {}
-table.insert(outputLines, "=== REMOTEEVENTS & REMOTEFUNCTIONS ===")
-if #findings.remotes == 0 then
-    table.insert(outputLines, "None found.")
+-- Also scan the entire game (catches anything in weird places like CoreGui)
+scan(game)
+
+-- Build output
+local lines = {}
+table.insert(lines, "=== REMOTES (can send data to server) ===")
+if #remotes == 0 then
+    table.insert(lines, "None found.")
 else
-    for _, remote in ipairs(findings.remotes) do
-        table.insert(outputLines, string.format("[%s] %s : %s", remote.className, remote.name, remote.path))
+    for _, r in ipairs(remotes) do
+        table.insert(lines, string.format("[%s] %s -> %s", r.class, r.name, r.path))
     end
 end
 
-table.insert(outputLines, "\n=== POTENTIAL SAVE-RELATED INSTANCES (by name) ===")
-if #findings.others == 0 then
-    table.insert(outputLines, "None found.")
+table.insert(lines, "\n=== INSTANCES WITH 'save' OR 'data' IN NAME ===")
+if #saveRelated == 0 then
+    table.insert(lines, "None found.")
 else
-    for _, obj in ipairs(findings.others) do
-        table.insert(outputLines, string.format("[%s] %s : %s", obj.className, obj.name, obj.path))
+    for _, s in ipairs(saveRelated) do
+        table.insert(lines, string.format("[%s] %s -> %s", s.class, s.name, s.path))
     end
 end
 
--- Add note about other server-save methods (client-side limitations)
-table.insert(outputLines, "\n=== NOTES ===")
-table.insert(outputLines, "1. RemoteEvent: Use :FireServer() to send data to server.")
-table.insert(outputLines, "2. RemoteFunction: Use :InvokeServer() to send data and receive a response.")
-table.insert(outputLines, "3. On the client, you cannot directly call DataStoreService or other server-only services.")
-table.insert(outputLines, "4. The server must have handlers listening to these remotes for any data to be saved.")
-table.insert(outputLines, "5. Check if any HttpService POST requests are made (but that's external, not game server).")
-table.insert(outputLines, "6. Also watch for custom events via BindableEvent (client-only) - they cannot save to server.")
+table.insert(lines, "\n=== HOW TO SEND DATA TO SERVER (Client → Server) ===")
+table.insert(lines, "• RemoteEvent: remote:FireServer(data)")
+table.insert(lines, "• RemoteFunction: remote:InvokeServer(data)")
+table.insert(lines, "• You cannot call DataStoreService or HttpService from client.")
+table.insert(lines, "• The server must have matching .OnServerEvent / .OnServerInvoke handlers.")
 
-local finalOutput = table.concat(outputLines, "\n")
-
--- Output to console
+local finalOutput = table.concat(lines, "\n")
 print(finalOutput)
 
--- Copy to clipboard (executor-specific)
+-- Copy to clipboard
 if setclipboard then
     setclipboard(finalOutput)
-    print("\n[✓] Results copied to clipboard.")
+    print("\n[✓] Copied to clipboard (setclipboard).")
 elseif toclipboard then
     toclipboard(finalOutput)
-    print("\n[✓] Results copied to clipboard.")
+    print("\n[✓] Copied to clipboard (toclipboard).")
 else
-    print("\n[!] Clipboard function not found. Please copy manually.")
+    print("\n[!] No clipboard function found. Copy manually.")
 end
 
--- Also return the output if executor supports returning
 return finalOutput
