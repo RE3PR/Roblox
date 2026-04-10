@@ -1,110 +1,107 @@
--- Remote Enumeration & Clipboard Export Script
--- Scans: ReplicatedStorage, Workspace, Players.LocalPlayer, Lighting, StarterGui, StarterPack, etc.
+-- Roblox Executor Script: Find all RemoteEvents/RemoteFunctions and other server-save mechanisms
+-- This script scans the entire game hierarchy, lists all relevant instances,
+-- and copies the results to your clipboard.
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local Lighting = game:GetService("Lighting")
-local StarterGui = game:GetService("StarterGui")
-local StarterPack = game:GetService("StarterPack")
-local player = Players.LocalPlayer
-
--- Helper to collect all relevant objects from a container recursively
-local function collectRemotes(container, list, path)
-    path = path or container:GetFullName()
-    for _, child in ipairs(container:GetChildren()) do
-        local childPath = path .. "." .. child.Name
-        if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") or 
-           child:IsA("BindableEvent") or child:IsA("BindableFunction") then
-            table.insert(list, {
-                Type = child.ClassName,
-                Path = childPath,
-                Object = child
-            })
-        end
-        -- Recurse into non-service folders (avoid massive recursion into services)
-        if child:IsA("Folder") or child:IsA("Model") or child:IsA("Configuration") then
-            collectRemotes(child, list, childPath)
-        end
+-- Helper function to get full path of an instance
+local function getFullPath(instance)
+    local path = instance.Name
+    local parent = instance.Parent
+    while parent do
+        path = parent.Name .. "/" .. path
+        parent = parent.Parent
     end
+    return path
 end
 
--- Main collection table
-local allRemotes = {}
+-- Helper function to check if an instance is a remote that can send data to server
+local function isServerSavingRemote(instance)
+    local className = instance.ClassName
+    return className == "RemoteEvent" or className == "RemoteFunction"
+    -- Note: UnreliableRemoteEvent also exists but is similar; add if needed
+    -- Also, BindableEvent/BindableFunction are client-only, so not included.
+end
 
--- Scan common containers
-local containersToScan = {
-    ReplicatedStorage,
-    Workspace,
-    player, -- Player instance (PlayerGui, Backpack, PlayerScripts, etc.)
-    Lighting,
-    StarterGui,
-    StarterPack,
+-- Main collection
+local findings = {
+    remotes = {},      -- list of remote objects
+    others = {}        -- any other potential server-save mechanisms (e.g., custom objects)
 }
 
--- Also scan the DataModel root (game) but limit depth to avoid massive output
-collectRemotes(game, allRemotes, "game")
-
--- Remove duplicates by path (some objects may appear multiple times if containers overlap)
-local uniqueRemotes = {}
-local seenPaths = {}
-for _, entry in ipairs(allRemotes) do
-    if not seenPaths[entry.Path] then
-        seenPaths[entry.Path] = true
-        table.insert(uniqueRemotes, entry)
+-- Recursively traverse all instances
+local function scan(instance)
+    if isServerSavingRemote(instance) then
+        table.insert(findings.remotes, {
+            name = instance.Name,
+            className = instance.ClassName,
+            path = getFullPath(instance)
+        })
+    end
+    -- Check for custom named objects that might be used as remotes (unlikely but thorough)
+    if instance:IsA("Instance") and (instance.Name:lower():find("save") or instance.Name:lower():find("data")) then
+        table.insert(findings.others, {
+            name = instance.Name,
+            className = instance.ClassName,
+            path = getFullPath(instance)
+        })
+    end
+    -- Recursively scan children
+    for _, child in ipairs(instance:GetChildren()) do
+        scan(child)
     end
 end
 
--- Sort by type then path
-table.sort(uniqueRemotes, function(a, b)
-    if a.Type == b.Type then
-        return a.Path < b.Path
-    else
-        return a.Type < b.Type
+-- Start scanning from game roots
+local roots = {game.Workspace, game.ReplicatedStorage, game.Lighting, game.ServerStorage, game.Players, game.StarterGui, game.StarterPack, game.StarterPlayer}
+for _, root in ipairs(roots) do
+    if root then
+        scan(root)
     end
-end)
+end
 
 -- Build output string
-local outputLines = {"=== REMOTE EVENTS / FUNCTIONS / BINDABLES ===\n"}
-local typeGroups = {}
-for _, entry in ipairs(uniqueRemotes) do
-    if not typeGroups[entry.Type] then
-        typeGroups[entry.Type] = {}
-    end
-    table.insert(typeGroups[entry.Type], entry.Path)
-end
-
-for _, typeName in ipairs({"RemoteEvent", "RemoteFunction", "BindableEvent", "BindableFunction"}) do
-    local paths = typeGroups[typeName]
-    if paths then
-        table.insert(outputLines, string.format("\n-- %s (%d) --", typeName, #paths))
-        for _, path in ipairs(paths) do
-            table.insert(outputLines, path)
-        end
-    end
-end
-
-local outputText = table.concat(outputLines, "\n")
-
--- Print to console
-print(outputText)
-
--- Copy to clipboard (supports common exploit executors)
-local success, err = pcall(function()
-    if setclipboard then
-        setclipboard(outputText)
-    elseif syn and syn.write_clipboard then
-        syn.write_clipboard(outputText)
-    elseif write_clipboard then
-        write_clipboard(outputText)
-    else
-        error("No clipboard function found")
-    end
-end)
-
-if success then
-    print("\n✅ List copied to clipboard!")
+local outputLines = {}
+table.insert(outputLines, "=== REMOTEEVENTS & REMOTEFUNCTIONS ===")
+if #findings.remotes == 0 then
+    table.insert(outputLines, "None found.")
 else
-    print("\n⚠️ Could not copy to clipboard: " .. tostring(err))
-    print("Manual copy the output above.")
+    for _, remote in ipairs(findings.remotes) do
+        table.insert(outputLines, string.format("[%s] %s : %s", remote.className, remote.name, remote.path))
+    end
 end
+
+table.insert(outputLines, "\n=== POTENTIAL SAVE-RELATED INSTANCES (by name) ===")
+if #findings.others == 0 then
+    table.insert(outputLines, "None found.")
+else
+    for _, obj in ipairs(findings.others) do
+        table.insert(outputLines, string.format("[%s] %s : %s", obj.className, obj.name, obj.path))
+    end
+end
+
+-- Add note about other server-save methods (client-side limitations)
+table.insert(outputLines, "\n=== NOTES ===")
+table.insert(outputLines, "1. RemoteEvent: Use :FireServer() to send data to server.")
+table.insert(outputLines, "2. RemoteFunction: Use :InvokeServer() to send data and receive a response.")
+table.insert(outputLines, "3. On the client, you cannot directly call DataStoreService or other server-only services.")
+table.insert(outputLines, "4. The server must have handlers listening to these remotes for any data to be saved.")
+table.insert(outputLines, "5. Check if any HttpService POST requests are made (but that's external, not game server).")
+table.insert(outputLines, "6. Also watch for custom events via BindableEvent (client-only) - they cannot save to server.")
+
+local finalOutput = table.concat(outputLines, "\n")
+
+-- Output to console
+print(finalOutput)
+
+-- Copy to clipboard (executor-specific)
+if setclipboard then
+    setclipboard(finalOutput)
+    print("\n[✓] Results copied to clipboard.")
+elseif toclipboard then
+    toclipboard(finalOutput)
+    print("\n[✓] Results copied to clipboard.")
+else
+    print("\n[!] Clipboard function not found. Please copy manually.")
+end
+
+-- Also return the output if executor supports returning
+return finalOutput
